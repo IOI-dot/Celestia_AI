@@ -255,7 +255,7 @@ def render_animated_hero(height=600):
 
 # --- Usage in Streamlit ---
 render_fullscreen_starfield()  # call first to be in the background
-render_animated_hero(height=600)  # bigger hero
+render_animated_hero(height=300)  # bigger hero
 
 
 
@@ -495,6 +495,7 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
 
