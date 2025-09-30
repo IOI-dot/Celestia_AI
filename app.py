@@ -114,35 +114,33 @@ def align_features(X_new, model):
     except Exception as e:
         st.warning(f"Could not extract expected columns from pipeline: {e}")
         return X_new
-    expected = expected_num + expected_cat
+
     Xp = X_new.copy()
 
+    # Numeric
     for col in expected_num:
         if col not in Xp.columns:
-            # Respect dtype by filling 0 with int or float depending on other data
+            # If model trained on int64, fill with int; if float64, fill with float
             Xp[col] = 0
         elif not np.issubdtype(Xp[col].dtype, np.number):
             Xp[col] = pd.to_numeric(Xp[col], errors='coerce').fillna(0)
 
+    # Categorical
     for col in expected_cat:
         if col not in Xp.columns:
             Xp[col] = "missing"
         else:
             Xp[col] = Xp[col].astype(str)
 
-    # Reorder and keep only expected
-    existing = [c for c in expected if c in Xp.columns]
-    Xp = Xp.loc[:, existing]
+    # Reorder columns
+    Xp = Xp[expected_num + expected_cat]
 
-    for c in expected:
-        if c not in Xp.columns:
-            Xp[c] = 0 if c in expected_num else "missing"
-
-    # Cast numeric columns to the same type they had in training if possible
+    # Match numeric dtype of training (float64 is default for HGB)
     for col in expected_num:
-        if col in Xp.columns:
-            Xp[col] = Xp[col].astype(np.float64)
-    return Xp[expected]
+        Xp[col] = Xp[col].astype(np.float64)
+
+    return Xp
+
 
 
 # -------------------------
@@ -152,10 +150,12 @@ def render_animated_hero(height=400):
     html = f"""
     <div style="position:relative;width:100%;height:{height}px;overflow:hidden;border-radius:12px;margin-bottom:10px;">
       <canvas id="starfield" style="width:100%;height:100%;display:block;"></canvas>
+
+      <!-- Sun -->
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">
-        <div style="width:200px;height:200px;border-radius:50%;
+        <div style="width:100px;height:100px;border-radius:50%;
           background: radial-gradient(circle at 30% 25%, #ffd27a, #e06b00 35%, #8b2b00 70%);
-          box-shadow: 0 0 60px rgba(255,215,0,0.3), inset -10px -10px 40px rgba(255,255,255,0.05);
+          box-shadow: 0 0 40px rgba(255,215,0,0.3), inset -5px -5px 20px rgba(255,255,255,0.05);
           animation: spin 15s linear infinite;"></div>
       </div>
     </div>
@@ -177,27 +177,53 @@ def render_animated_hero(height=400):
     }}
     resize(); window.addEventListener('resize', resize);
 
+    // Stars
     const stars = [];
-    for(let i=0;i<200;i++) {{
+    for(let i=0;i<300;i++) {{
         stars.push({{
             x: Math.random()*canvas.clientWidth,
             y: Math.random()*canvas.clientHeight,
             r: Math.random()*1.5+0.5,
-            a: Math.random(),
-            blinkSpeed: 0.02 + Math.random()*0.03
+            blinkSpeed: 0.02 + Math.random()*0.03,
+            phase: Math.random()*Math.PI*2
         }});
     }}
+
+    // Planets
+    const planets = [
+        {{ radius: 150, size: 15, speed: 0.01, color:'#9be9a8', angle: Math.random()*2*Math.PI }},
+        {{ radius: 220, size: 20, speed: 0.008, color:'#9fb4ff', angle: Math.random()*2*Math.PI }},
+        {{ radius: 280, size: 10, speed: 0.012, color:'#ffd1a6', angle: Math.random()*2*Math.PI }}
+    ];
+
     let t=0;
     function draw() {{
         ctx.clearRect(0,0,canvas.clientWidth, canvas.clientHeight);
+
+        // Draw blinking stars
         for(const s of stars){{
             ctx.beginPath();
-            ctx.globalAlpha = 0.5 + 0.5*Math.sin(t*s.blinkSpeed*50 + s.a*10);
+            ctx.globalAlpha = 0.5 + 0.5*Math.sin(t*s.blinkSpeed*50 + s.phase);
             ctx.fillStyle = 'white';
             ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
             ctx.fill();
         }}
         ctx.globalAlpha = 1;
+
+        const cx = canvas.clientWidth/2;
+        const cy = canvas.clientHeight/2;
+
+        // Draw planets
+        for(const p of planets){{
+            p.angle += p.speed;
+            const x = cx + p.radius*Math.cos(p.angle);
+            const y = cy + p.radius*Math.sin(p.angle);
+            ctx.beginPath();
+            ctx.fillStyle = p.color;
+            ctx.arc(x,y,p.size,0,Math.PI*2);
+            ctx.fill();
+        }}
+
         t++;
         requestAnimationFrame(draw);
     }}
@@ -205,6 +231,7 @@ def render_animated_hero(height=400):
     </script>
     """
     components.html(html, height=height+20)
+
 
 
 # -------------------------
@@ -443,6 +470,7 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
 
