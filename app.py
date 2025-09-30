@@ -140,7 +140,7 @@ def align_features(X_new, model):
         Xp[col] = Xp[col].astype(np.float64)
 
     return Xp
-
+# Full-screen blinking starfield behind everything
 def render_fullscreen_starfield():
     html = """
     <canvas id="fullscreen-stars" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;"></canvas>
@@ -157,13 +157,13 @@ def render_fullscreen_starfield():
     window.addEventListener('resize', resize);
 
     const stars = [];
-    const nStars = 500; // more stars
+    const nStars = 500;
     for(let i=0;i<nStars;i++){
         stars.push({
             x: Math.random()*canvas.width/devicePixelRatio,
             y: Math.random()*canvas.height/devicePixelRatio,
             r: Math.random()*2+0.5,
-            blinkSpeed: 0.001 + Math.random()*0.002, // slower blinking
+            blinkSpeed: 0.001 + Math.random()*0.002,
             phase: Math.random()*Math.PI*2,
             maxAlpha: 0.8 + Math.random()*0.2
         });
@@ -189,22 +189,19 @@ def render_fullscreen_starfield():
     draw();
     </script>
     """
-    components.html(html, height=0)  # height 0 because canvas is full-page
+    components.html(html, height=0)
 
-
-# -------------------------
-# Animated hero + starfield
-# -------------------------
-def render_animated_hero(height=800):
+# Hero section with spinning planets
+def render_animated_hero(height=600):
     html = f"""
-    <div style="position:relative;width:100%;height:{height}px;overflow:hidden;border-radius:12px;margin-bottom:10px;">
-      <canvas id="starfield" style="width:100%;height:100%;display:block;"></canvas>
+    <div style="position:relative;width:100%;height:{height}px;overflow:visible;border-radius:12px;margin-bottom:10px;">
+      <canvas id="hero-starfield" style="width:100%;height:100%;display:block;"></canvas>
 
       <!-- Sun -->
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">
-        <div style="width:100px;height:100px;border-radius:50%;
+        <div style="width:120px;height:120px;border-radius:50%;
           background: radial-gradient(circle at 30% 25%, #ffd27a, #e06b00 35%, #8b2b00 70%);
-          box-shadow: 0 0 40px rgba(255,215,0,0.3), inset -5px -5px 20px rgba(255,255,255,0.05);
+          box-shadow: 0 0 60px rgba(255,215,0,0.3), inset -10px -10px 40px rgba(255,255,255,0.05);
           animation: spin 15s linear infinite;"></div>
       </div>
     </div>
@@ -217,7 +214,7 @@ def render_animated_hero(height=800):
     </style>
 
     <script>
-    const canvas = document.getElementById('starfield');
+    const canvas = document.getElementById('hero-starfield');
     const ctx = canvas.getContext('2d');
     function resize() {{
         canvas.width = canvas.clientWidth*devicePixelRatio;
@@ -226,43 +223,18 @@ def render_animated_hero(height=800):
     }}
     resize(); window.addEventListener('resize', resize);
 
-    // Stars
-    const stars = [];
-    for(let i=0;i<300;i++) {{
-        stars.push({{
-            x: Math.random()*canvas.clientWidth,
-            y: Math.random()*canvas.clientHeight,
-            r: Math.random()*1.5+0.5,
-            blinkSpeed: 0.02 + Math.random()*0.03,
-            phase: Math.random()*Math.PI*2
-        }});
-    }}
-
-    // Planets
     const planets = [
-        {{ radius: 150, size: 15, speed: 0.01, color:'#9be9a8', angle: Math.random()*2*Math.PI }},
-        {{ radius: 220, size: 20, speed: 0.008, color:'#9fb4ff', angle: Math.random()*2*Math.PI }},
-        {{ radius: 280, size: 10, speed: 0.012, color:'#ffd1a6', angle: Math.random()*2*Math.PI }}
+        {{ radius: 250, size: 15, speed: 0.01, color:'#9be9a8', angle: Math.random()*2*Math.PI }},
+        {{ radius: 350, size: 20, speed: 0.008, color:'#9fb4ff', angle: Math.random()*2*Math.PI }},
+        {{ radius: 450, size: 10, speed: 0.012, color:'#ffd1a6', angle: Math.random()*2*Math.PI }}
     ];
 
     let t=0;
     function draw() {{
         ctx.clearRect(0,0,canvas.clientWidth, canvas.clientHeight);
-
-        // Draw blinking stars
-        for(const s of stars){{
-            ctx.beginPath();
-            ctx.globalAlpha = 0.5 + 0.5*Math.sin(t*s.blinkSpeed*50 + s.phase);
-            ctx.fillStyle = 'white';
-            ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
-            ctx.fill();
-        }}
-        ctx.globalAlpha = 1;
-
         const cx = canvas.clientWidth/2;
         const cy = canvas.clientHeight/2;
 
-        // Draw planets
         for(const p of planets){{
             p.angle += p.speed;
             const x = cx + p.radius*Math.cos(p.angle);
@@ -272,7 +244,6 @@ def render_animated_hero(height=800):
             ctx.arc(x,y,p.size,0,Math.PI*2);
             ctx.fill();
         }}
-
         t++;
         requestAnimationFrame(draw);
     }}
@@ -280,6 +251,11 @@ def render_animated_hero(height=800):
     </script>
     """
     components.html(html, height=height+20)
+
+
+# --- Usage in Streamlit ---
+render_fullscreen_starfield()  # call first to be in the background
+render_animated_hero(height=600)  # bigger hero
 
 
 
@@ -519,6 +495,7 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
 
