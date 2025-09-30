@@ -251,7 +251,8 @@ tab1, tab2, tab3 = st.tabs(["🔮 Predict", "🔧 Retrain", "📊 Insights"])
 with tab1:
     st.header("Predict — Full-featured manual input & Batch CSV")
     st.markdown("Provide values for **all features expected by the model** or upload a CSV for batch prediction.")
-
+    numeric_inputs = {}
+    categorical_inputs = {}
     if gb_pipeline and le:
         try:
             num_cols, cat_cols = get_expected_columns_from_pipeline(gb_pipeline)
@@ -260,14 +261,15 @@ with tab1:
             num_cols, cat_cols = [], []
 
         with st.expander("🪐 Numeric Features", expanded=True):
-         for col in num_cols:
-             st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
-             numeric_inputs[col] = st.number_input("", value=0.0, format="%.4f", key=f"num_{col}")
+            for col in num_cols:
+              st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
+              numeric_inputs[col] = st.number_input("", value=0.0, format="%.4f", key=f"num_{col}")
 
-with st.expander("🛸 Categorical Features", expanded=False):
-        for col in cat_cols:
-            st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
-            categorical_inputs[col] = st.text_input("", value="missing", key=f"cat_{col}")
+         with st.expander("🛸 Categorical Features", expanded=False):
+            for col in cat_cols:
+              st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
+              categorical_inputs[col] = st.text_input("", value="missing", key=f"cat_{col}")
+
 
         if st.button("Predict with current inputs"):
             try:
@@ -433,4 +435,5 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
