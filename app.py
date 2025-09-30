@@ -4,7 +4,6 @@ import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import joblib
-import io
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
@@ -19,40 +18,35 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 # Page config & global CSS
 # -------------------------
 st.set_page_config(page_title="ExoClass — Exoplanet Classifier", layout="wide", page_icon="🚀")
-st.markdown(
-    """
-    <style>
-    /* Background + basic theme */
-    .stApp {
-        background: linear-gradient(180deg, #05032d 0%, #071a3a 40%, #0b2b4a 100%);
-        color: #e6f0ff;
-    }
-    /* Sidebar authentic panel */
-    [data-testid="stSidebar"] > div:first-child {
-        background: linear-gradient(180deg,#04122b,#08243f);
-        border-right: 1px solid rgba(255,255,255,0.04);
-        padding: 16px;
-        color: #dbefff;
-    }
-    .sidebar-title {
-        color: #ffd966;
-        font-weight: 700;
-        font-size: 18px;
-        margin-bottom: 6px;
-    }
-    .card {
-        background: rgba(255,255,255,0.03);
-        border-radius: 12px;
-        padding: 12px;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.45);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(180deg, #05032d 0%, #071a3a 40%, #0b2b4a 100%);
+    color: #e6f0ff;
+}
+[data-testid="stSidebar"] > div:first-child {
+    background: linear-gradient(180deg,#04122b,#08243f);
+    border-right: 1px solid rgba(255,255,255,0.04);
+    padding: 16px;
+    color: #dbefff;
+}
+.sidebar-title {
+    color: #ffd966;
+    font-weight: 700;
+    font-size: 18px;
+    margin-bottom: 6px;
+}
+.card {
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+}
+</style>
+""", unsafe_allow_html=True)
 
 # -------------------------
-# Utilities & helpers
+# Utilities
 # -------------------------
 @st.cache_data
 def load_label_encoder(path="label_encoder.joblib"):
@@ -127,20 +121,15 @@ def align_features(X_new, model):
     for col in expected_cat:
         if col not in Xp.columns:
             Xp[col] = "missing"
-    # Reorder and keep only expected columns (if any mismatch, keep intersection)
     existing = [c for c in expected if c in Xp.columns]
     Xp = Xp.loc[:, existing]
-    # If any expected missing after selection, add defaults so pipeline won't crash
     for c in expected:
         if c not in Xp.columns:
-            if c in expected_num:
-                Xp[c] = 0.0
-            else:
-                Xp[c] = "missing"
+            Xp[c] = 0.0 if c in expected_num else "missing"
     return Xp[expected]
 
 # -------------------------
-# Animated hero + rotating planets (HTML)
+# Animated hero + starfield
 # -------------------------
 def render_animated_hero(height=300):
     html = f"""
@@ -153,112 +142,59 @@ def render_animated_hero(height=300):
           animation: spin 12s linear infinite;"></div>
       </div>
     </div>
-
-    <style>
-    @keyframes spin {{
-      0% {{ transform: rotate(0deg); }}
-      100% {{ transform: rotate(360deg); }}
-    }}
-    </style>
-
+    <style>@keyframes spin {{0% {{transform: rotate(0deg);}}100% {{transform: rotate(360deg);}}}}</style>
     <script>
-    // simple starfield & orbiting dots on canvas
-    const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
-    function resize() {{
-      canvas.width = canvas.clientWidth * devicePixelRatio;
-      canvas.height = canvas.clientHeight * devicePixelRatio;
-      ctx.scale(devicePixelRatio, devicePixelRatio);
-    }}
-    resize();
-    window.addEventListener('resize', resize);
-    // create stars
-    const stars = [];
-    for (let i=0;i<120;i++) {{
-      stars.push({{x:Math.random()*canvas.clientWidth, y:Math.random()*canvas.clientHeight, r:Math.random()*1.5+0.3, a:Math.random()}}); 
-    }}
-    let t = 0;
-    function draw() {{
-      ctx.clearRect(0,0,canvas.clientWidth, canvas.clientHeight);
-      // stars
-      for (const s of stars) {{
-        ctx.beginPath();
-        ctx.globalAlpha = 0.6 + 0.4*Math.sin(t*0.02 + s.a*10);
-        ctx.fillStyle = 'white';
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-        ctx.fill();
-      }}
-      ctx.globalAlpha = 1;
-      // orbiting small dots around center
-      const cx = canvas.clientWidth/2;
-      const cy = canvas.clientHeight/2;
-      for (let i=0;i<3;i++) {{
-        const radius = 90 + i*30;
-        const angle = t*0.01*(i+1);
-        const x = cx + radius*Math.cos(angle);
-        const y = cy + radius*Math.sin(angle);
-        ctx.beginPath();
-        ctx.fillStyle = i==0 ? '#9be9a8' : i==1 ? '#9fb4ff' : '#ffd1a6';
-        ctx.arc(x, y, 6 - i*1.5, 0, Math.PI*2);
-        ctx.fill();
-      }}
-      t++;
-      requestAnimationFrame(draw);
+    const canvas = document.getElementById('c'); const ctx = canvas.getContext('2d');
+    function resize() {{ canvas.width = canvas.clientWidth*devicePixelRatio; canvas.height = canvas.clientHeight*devicePixelRatio; ctx.scale(devicePixelRatio, devicePixelRatio);}}
+    resize(); window.addEventListener('resize', resize);
+    const stars=[]; for(let i=0;i<120;i++) stars.push({{x:Math.random()*canvas.clientWidth, y:Math.random()*canvas.clientHeight, r:Math.random()*1.5+0.3, a:Math.random()}});
+    let t=0;
+    function draw(){{ ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+        for(const s of stars){{ ctx.beginPath(); ctx.globalAlpha = 0.6+0.4*Math.sin(t*0.02+s.a*10); ctx.fillStyle='white'; ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();}}
+        ctx.globalAlpha=1;
+        const cx=canvas.clientWidth/2, cy=canvas.clientHeight/2;
+        for(let i=0;i<3;i++){{
+            const radius=90+i*30, angle=t*0.01*(i+1), x=cx+radius*Math.cos(angle), y=cy+radius*Math.sin(angle);
+            ctx.beginPath(); ctx.fillStyle=i==0?'#9be9a8':i==1?'#9fb4ff':'#ffd1a6'; ctx.arc(x,y,6-i*1.5,0,Math.PI*2); ctx.fill();
+        }}
+        t++; requestAnimationFrame(draw);
     }}
     draw();
     </script>
     """
-    # components.html will safely embed this
-    components.html(html, height=height + 20)
+    components.html(html, height=height+20)
 
 # -------------------------
-# Sidebar: model loader + authentic look
+# Sidebar: model loader
 # -------------------------
 st.sidebar.markdown('<div class="sidebar-title">🚀 ExoClass Model</div>', unsafe_allow_html=True)
 st.sidebar.write("Load a pretrained pipeline (.joblib) and label encoder, or retrain in app.")
 
-uploaded_model = st.sidebar.file_uploader("Upload gb_pipeline.joblib (optional)", type=["joblib"])
-uploaded_le = st.sidebar.file_uploader("Upload label_encoder.joblib (optional)", type=["joblib"])
+uploaded_model = st.sidebar.file_uploader("Upload gb_pipeline.joblib", type=["joblib"])
+uploaded_le = st.sidebar.file_uploader("Upload label_encoder.joblib", type=["joblib"])
 
-if uploaded_model is not None:
-    try:
-        gb_pipeline = joblib.load(uploaded_model)
-    except Exception as e:
-        st.sidebar.error(f"Failed to load uploaded model: {e}")
-        gb_pipeline = None
-else:
-    gb_pipeline = load_model("gb_pipeline.joblib")
-
-if uploaded_le is not None:
-    try:
-        le = joblib.load(uploaded_le)
-    except Exception as e:
-        st.sidebar.error(f"Failed to load uploaded encoder: {e}")
-        le = None
-else:
-    le = load_label_encoder("label_encoder.joblib")
+gb_pipeline = joblib.load(uploaded_model) if uploaded_model else load_model("gb_pipeline.joblib")
+le = joblib.load(uploaded_le) if uploaded_le else load_label_encoder("label_encoder.joblib")
 
 if gb_pipeline is None or le is None:
     st.sidebar.warning("Model or label encoder not found. Use Retrain or upload model + encoder.")
 else:
     st.sidebar.success("Model & LabelEncoder ready ✅")
 
-# Extra sidebar info (authentic)
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Mission:** NASA Space Apps — Hunting for Exoplanets with AI")
 st.sidebar.markdown("- Upload K2/Kepler/TESS CSVs\n- Retrain with custom FP weight\n- Inspect metrics & download models")
 st.sidebar.markdown("---")
-st.sidebar.markdown("🔗 **Tips:** For quick demo use the 'Quick manual input' with the 3 core features.")
+st.sidebar.markdown("🔗 **Tip:** Fill all features in manual input or upload CSV for batch prediction.")
 
 # -------------------------
-# Header + animated hero
+# Header + hero
 # -------------------------
 col_left, col_right = st.columns([3,1])
 with col_left:
     st.title("🌌 CelestiaAI — Exoplanet Classifier")
     st.markdown("**NASA Space Apps 2025** — classify K2/Kepler/TESS entries as `CONFIRMED`, `CANDIDATE`, or `FALSE POSITIVE`.")
 with col_right:
-    # render spinning planet in right column (no st.image(None) to avoid None error)
     render_animated_hero(height=200)
 
 # -------------------------
@@ -267,75 +203,71 @@ with col_right:
 tab1, tab2, tab3 = st.tabs(["🔮 Predict", "🔧 Retrain", "📊 Insights"])
 
 # -------------------------
-# PREDICT TAB
+# PREDICT TAB — full dynamic input
 # -------------------------
 with tab1:
-    st.header("Predict — Quick demo & Batch CSV")
-    st.markdown("Use quick manual input (3 features) for judges/demo or upload full CSVs for batch prediction.")
+    st.header("Predict — Full-featured manual input & Batch CSV")
+    st.markdown("Provide values for **all features expected by the model** or upload a CSV for batch prediction.")
 
-    # quick manual
-    st.subheader("Quick manual input (demo)")
-    c1, c2, c3, c4 = st.columns([1,1,1,0.6])
-    with c1:
-        pl_orbper = st.number_input("pl_orbper (days)", value=10.5, format="%.4f")
-    with c2:
-        pl_rade = st.number_input("pl_rade (Earth radii)", value=1.2, format="%.4f")
-    with c3:
-        pl_trandur = st.number_input("pl_trandur (hours)", value=5.6, format="%.4f")
-    with c4:
-        run_manual = st.button("Predict")
+    if gb_pipeline and le:
+        try:
+            num_cols, cat_cols = get_expected_columns_from_pipeline(gb_pipeline)
+        except Exception as e:
+            st.error(f"Could not extract expected features: {e}")
+            num_cols, cat_cols = [], []
 
-    if run_manual:
-        if gb_pipeline is None or le is None:
-            st.error("Model not loaded.")
-        else:
-            sample_df = pd.DataFrame([{"pl_orbper":pl_orbper, "pl_rade":pl_rade, "pl_trandur":pl_trandur}])
-            sample_aligned = align_features(sample_df, gb_pipeline)
+        with st.expander("🪐 Numeric Features", expanded=True):
+            numeric_inputs = {col: st.number_input(col, value=0.0, format="%.4f", key=f"num_{col}") for col in num_cols}
+
+        with st.expander("🛸 Categorical Features", expanded=False):
+            categorical_inputs = {col: st.text_input(col, value="missing", key=f"cat_{col}") for col in cat_cols}
+
+        if st.button("Predict with current inputs"):
             try:
-                pred = gb_pipeline.predict(sample_aligned)[0]
-                proba = gb_pipeline.predict_proba(sample_aligned)[0]
-                label = le.inverse_transform([pred])[0]
-                st.metric("Prediction", label)
-                st.subheader("Probabilities")
-                st.dataframe(pd.DataFrame(proba.reshape(1,-1), columns=le.classes_).T.rename(columns={0:"Probability"}))
+                df_input = pd.DataFrame([{**numeric_inputs, **categorical_inputs}])
+                df_aligned = align_features(df_input, gb_pipeline)
+                pred_idx = gb_pipeline.predict(df_aligned)[0]
+                proba = gb_pipeline.predict_proba(df_aligned)[0]
+                label = le.inverse_transform([pred_idx])[0]
+
+                st.subheader("🚀 Prediction Result")
+                st.metric("Predicted Class", label)
+
+                st.subheader("📊 Prediction Probabilities")
+                prob_df = pd.DataFrame(proba.reshape(1, -1), columns=le.classes_).T
+                prob_df.columns = ["Probability"]
+                st.dataframe(prob_df.style.format("{:.3f}"))
+
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
     st.markdown("---")
-    # batch upload
+    # Batch CSV upload
     st.subheader("Batch prediction (CSV upload)")
     upload_csv = st.file_uploader("Upload CSV (K2-style or minimal 3 cols)", type=["csv"], key="batch_predict")
     if upload_csv is not None:
-        if gb_pipeline is None or le is None:
-            st.error("Model not loaded.")
-        else:
-            try:
-                df_new = pd.read_csv(upload_csv, comment="#")
-                df_new = df_new.iloc[98:] if df_new.shape[0] > 200 else df_new
-                df_new.columns = df_new.columns.str.strip()
-                st.write("Preview of upload:")
-                st.dataframe(df_new.head(6))
+        try:
+            df_new = pd.read_csv(upload_csv, comment="#")
+            df_new.columns = df_new.columns.str.strip()
+            st.write("Preview of upload:")
+            st.dataframe(df_new.head(6))
 
-                if "disposition" in df_new.columns:
-                    X_new = df_new.drop(columns=["disposition"])
-                else:
-                    X_new = df_new.copy()
+            X_new = df_new.drop(columns=["disposition"]) if "disposition" in df_new.columns else df_new.copy()
+            X_new_aligned = align_features(X_new, gb_pipeline)
+            preds = gb_pipeline.predict(X_new_aligned)
+            probs = gb_pipeline.predict_proba(X_new_aligned)
+            decoded = le.inverse_transform(preds)
 
-                X_new_aligned = align_features(X_new, gb_pipeline)
-                preds = gb_pipeline.predict(X_new_aligned)
-                probs = gb_pipeline.predict_proba(X_new_aligned)
-                decoded = le.inverse_transform(preds)
+            results = df_new.reset_index(drop=True).copy()
+            results["prediction"] = decoded
+            results["probability"] = probs.max(axis=1)
+            st.subheader("Predictions (first rows)")
+            st.dataframe(results.head(20))
 
-                results = df_new.reset_index(drop=True).copy()
-                results["prediction"] = decoded
-                results["probability"] = probs.max(axis=1)
-                st.subheader("Predictions (first rows)")
-                st.dataframe(results.head(20))
-
-                csv_out = results.to_csv(index=False).encode("utf-8")
-                st.download_button("Download predictions CSV", data=csv_out, file_name="predictions.csv", mime="text/csv")
-            except Exception as e:
-                st.error(f"Batch prediction failed: {e}")
+            csv_out = results.to_csv(index=False).encode("utf-8")
+            st.download_button("Download predictions CSV", data=csv_out, file_name="predictions.csv", mime="text/csv")
+        except Exception as e:
+            st.error(f"Batch prediction failed: {e}")
 
 # -------------------------
 # RETRAIN TAB
@@ -343,7 +275,6 @@ with tab1:
 with tab2:
     st.header("Retrain model (advanced)")
     st.markdown("Upload a CSV containing `disposition` (CONFIRMED/CANDIDATE/FALSE POSITIVE).")
-
     retrain_file = st.file_uploader("Upload CSV for retraining", type=["csv"], key="retrain")
     fp_weight = st.slider("False positive weight multiplier", min_value=1.0, max_value=20.0, value=5.0, step=0.5)
     n_estimators = st.slider("Iterations (max_iter)", min_value=100, max_value=2000, value=200, step=50)
@@ -352,7 +283,7 @@ with tab2:
     if retrain_file is not None and st.button("Start Retraining"):
         try:
             df_retrain = pd.read_csv(retrain_file, comment="#")
-            df_retrain = df_retrain.iloc[98:] if df_retrain.shape[0] > 200 else df_retrain
+            df_retrain = df_retrain.iloc[98:] if df_retrain.shape[0]>200 else df_retrain
             df_retrain.columns = df_retrain.columns.str.strip()
             df_retrain = df_retrain[df_retrain['disposition'].isin(['CONFIRMED','CANDIDATE','FALSE POSITIVE'])]
             useless_cols = ['pl_name','hostname','disp_refname','pl_refname','st_refname','sy_refname','rastr','decstr','rowupdate','pl_pubdate','releasedate']
@@ -373,7 +304,6 @@ with tab2:
             ])
 
             class_weights = {i: (fp_weight if c == "FALSE POSITIVE" else 1.0) for i,c in enumerate(le_new.classes_)}
-
             gb_new = Pipeline(steps=[
                 ('preprocessor', preprocessor_new),
                 ('classifier', HistGradientBoostingClassifier(learning_rate=float(lr), max_iter=int(n_estimators), class_weight=class_weights, random_state=42))
@@ -383,10 +313,7 @@ with tab2:
             gb_new.fit(Xtr, ytr)
 
             yval_pred = gb_new.predict(Xval)
-            try:
-                yval_score = gb_new.predict_proba(Xval)
-            except Exception:
-                yval_score = None
+            yval_score = gb_new.predict_proba(Xval) if hasattr(gb_new.named_steps['classifier'], 'predict_proba') else None
 
             acc = accuracy_score(yval, yval_pred)
             f1 = f1_score(yval, yval_pred, average='weighted')
@@ -403,15 +330,12 @@ with tab2:
             st.subheader("Classification Report (validation)")
             st.text(classification_report(yval, yval_pred, target_names=le_new.classes_))
 
-            cm = confusion_matrix(yval, yval_pred)
             st.subheader("Confusion Matrix (validation)")
-            plot_confusion_matrix(cm, le_new.classes_)
+            plot_confusion_matrix(confusion_matrix(yval, yval_pred), le_new.classes_)
 
             if yval_score is not None:
                 st.subheader("ROC Curves (validation)")
                 plot_roc_curve(yval, yval_score, le_new.classes_)
-            else:
-                st.info("ROC curve unavailable because model doesn't provide predict_proba.")
 
             joblib.dump(gb_new, "gb_pipeline_retrained.joblib")
             joblib.dump(le_new, "label_encoder_retrained.joblib")
@@ -421,7 +345,6 @@ with tab2:
             st.download_button("Download retrained model (.joblib)", open("gb_pipeline_retrained.joblib","rb"), "gb_pipeline_retrained.joblib")
             st.download_button("Download retrained label encoder (.joblib)", open("label_encoder_retrained.joblib","rb"), "label_encoder_retrained.joblib")
 
-            # update in-memory objects
             gb_pipeline = gb_new
             le = le_new
 
@@ -439,19 +362,20 @@ with tab3:
         try:
             clf = gb_pipeline.named_steps["classifier"]
             preproc = gb_pipeline.named_steps["preprocessor"]
-            num_cols = []
             try:
                 num_cols, cat_cols = get_expected_columns_from_pipeline(gb_pipeline)
             except Exception:
                 num_cols = st.text_input("Numeric feature names (comma-separated) to label importances", value="pl_orbper,pl_rade,pl_trandur").split(",")
+
             feature_names = num_cols[:]
             try:
                 ohe = preproc.named_transformers_["cat"].named_steps["onehot"]
                 feature_names += list(ohe.get_feature_names_out())
             except Exception:
-                # fallback: use indices
                 feature_names = [f"f_{i}" for i in range(len(clf.feature_importances_))]
+
             plot_feature_importance(clf.feature_importances_, feature_names)
+
         except Exception as e:
             st.warning("Could not extract feature importances: " + str(e))
 
