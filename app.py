@@ -243,15 +243,16 @@ def render_animated_hero(height=800):
     const planets = [];
     const nPlanets = 8;  // more planets
     const baseRadius = 150;
-    for(let i=0;i<nPlanets;i++){{
-        planets.push({{
-            radius: baseRadius + i*60,
-            size: 5 + Math.random()*5,  // smaller planets
-            speed: 0.004 + Math.random()*0.01,
-            color: `hsl(${Math.random()*360}, 70%, 70%)`,
-            angle: Math.random()*2*Math.PI
-        }});
-    }}
+    for(let i=0;i<nPlanets;i++){
+      planets.push({
+        radius: baseRadius + i*60,
+        size: 5 + Math.random()*5,  // smaller planets
+        speed: 0.004 + Math.random()*0.01,
+        color: 'hsl(' + (Math.random()*360) + ',70%,70%)',
+        angle: Math.random()*2*Math.PI
+       });
+   }
+
 
     let t=0;
     function draw(){{
@@ -535,6 +536,7 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
 
