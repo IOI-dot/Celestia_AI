@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, label_binarize
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.inspection import permutation_importance
 
 # -------------------------
 # Page config & global CSS
@@ -362,23 +363,27 @@ with tab3:
         try:
             clf = gb_pipeline.named_steps["classifier"]
             preproc = gb_pipeline.named_steps["preprocessor"]
+
+            # Fetch numeric & categorical features
             try:
                 num_cols, cat_cols = get_expected_columns_from_pipeline(gb_pipeline)
             except Exception:
-                num_cols = st.text_input("Numeric feature names (comma-separated) to label importances", value="pl_orbper,pl_rade,pl_trandur").split(",")
+                num_cols = st.text_input("Numeric feature names (comma-separated)", value="pl_orbper,pl_rade,pl_trandur").split(",")
+                cat_cols = []
 
-            feature_names = num_cols[:]
-            try:
-                ohe = preproc.named_transformers_["cat"].named_steps["onehot"]
-                feature_names += list(ohe.get_feature_names_out())
-            except Exception:
-                feature_names = [f"f_{i}" for i in range(len(clf.feature_importances_))]
+            # Prepare dummy data for permutation importance
+            X_dummy = pd.DataFrame([{c: 0 if c in num_cols else "missing" for c in num_cols+cat_cols}])
+            X_aligned = align_features(X_dummy, gb_pipeline)
+            
+            # Compute permutation importance (faster, works for any model)
+            r = permutation_importance(gb_pipeline, X_aligned, np.array([0]), n_repeats=10, random_state=42, scoring='accuracy')
+            feature_names = num_cols + cat_cols
+            importances = r.importances_mean
 
-            plot_feature_importance(clf.feature_importances_, feature_names)
+            plot_feature_importance(importances, feature_names)
 
         except Exception as e:
             st.warning("Could not extract feature importances: " + str(e))
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
-
