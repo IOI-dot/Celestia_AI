@@ -116,54 +116,96 @@ def align_features(X_new, model):
         return X_new
     expected = expected_num + expected_cat
     Xp = X_new.copy()
+
     for col in expected_num:
         if col not in Xp.columns:
-            Xp[col] = 0.0
+            # Respect dtype by filling 0 with int or float depending on other data
+            Xp[col] = 0
+        elif not np.issubdtype(Xp[col].dtype, np.number):
+            Xp[col] = pd.to_numeric(Xp[col], errors='coerce').fillna(0)
+
     for col in expected_cat:
         if col not in Xp.columns:
             Xp[col] = "missing"
+        else:
+            Xp[col] = Xp[col].astype(str)
+
+    # Reorder and keep only expected
     existing = [c for c in expected if c in Xp.columns]
     Xp = Xp.loc[:, existing]
+
     for c in expected:
         if c not in Xp.columns:
-            Xp[c] = 0.0 if c in expected_num else "missing"
+            Xp[c] = 0 if c in expected_num else "missing"
+
+    # Cast numeric columns to the same type they had in training if possible
+    for col in expected_num:
+        if col in Xp.columns:
+            Xp[col] = Xp[col].astype(np.float64)
     return Xp[expected]
+
 
 # -------------------------
 # Animated hero + starfield
 # -------------------------
-def render_animated_hero(height=300):
+def render_animated_hero(height=400):
     html = f"""
     <div style="position:relative;width:100%;height:{height}px;overflow:hidden;border-radius:12px;margin-bottom:10px;">
-      <canvas id="c" style="width:100%;height:100%;display:block;"></canvas>
+      <canvas id="starfield" style="width:100%;height:100%;display:block;"></canvas>
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">
-        <div style="width:140px;height:140px;border-radius:50%;
+        <div style="width:200px;height:200px;border-radius:50%;
           background: radial-gradient(circle at 30% 25%, #ffd27a, #e06b00 35%, #8b2b00 70%);
-          box-shadow: 0 0 40px rgba(255,215,0,0.12), inset -8px -8px 30px rgba(255,255,255,0.03);
-          animation: spin 12s linear infinite;"></div>
+          box-shadow: 0 0 60px rgba(255,215,0,0.3), inset -10px -10px 40px rgba(255,255,255,0.05);
+          animation: spin 15s linear infinite;"></div>
       </div>
     </div>
-    <style>@keyframes spin {{0% {{transform: rotate(0deg);}}100% {{transform: rotate(360deg);}}}}</style>
+
+    <style>
+    @keyframes spin {{
+      0% {{ transform: rotate(0deg); }}
+      100% {{ transform: rotate(360deg); }}
+    }}
+    </style>
+
     <script>
-    const canvas = document.getElementById('c'); const ctx = canvas.getContext('2d');
-    function resize() {{ canvas.width = canvas.clientWidth*devicePixelRatio; canvas.height = canvas.clientHeight*devicePixelRatio; ctx.scale(devicePixelRatio, devicePixelRatio);}}
+    const canvas = document.getElementById('starfield');
+    const ctx = canvas.getContext('2d');
+    function resize() {{
+        canvas.width = canvas.clientWidth*devicePixelRatio;
+        canvas.height = canvas.clientHeight*devicePixelRatio;
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+    }}
     resize(); window.addEventListener('resize', resize);
-    const stars=[]; for(let i=0;i<120;i++) stars.push({{x:Math.random()*canvas.clientWidth, y:Math.random()*canvas.clientHeight, r:Math.random()*1.5+0.3, a:Math.random()}});
+
+    const stars = [];
+    for(let i=0;i<200;i++) {{
+        stars.push({{
+            x: Math.random()*canvas.clientWidth,
+            y: Math.random()*canvas.clientHeight,
+            r: Math.random()*1.5+0.5,
+            a: Math.random(),
+            blinkSpeed: 0.02 + Math.random()*0.03
+        }});
+    }}
     let t=0;
-    function draw(){{ ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
-        for(const s of stars){{ ctx.beginPath(); ctx.globalAlpha = 0.6+0.4*Math.sin(t*0.02+s.a*10); ctx.fillStyle='white'; ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();}}
-        ctx.globalAlpha=1;
-        const cx=canvas.clientWidth/2, cy=canvas.clientHeight/2;
-        for(let i=0;i<3;i++){{
-            const radius=90+i*30, angle=t*0.01*(i+1), x=cx+radius*Math.cos(angle), y=cy+radius*Math.sin(angle);
-            ctx.beginPath(); ctx.fillStyle=i==0?'#9be9a8':i==1?'#9fb4ff':'#ffd1a6'; ctx.arc(x,y,6-i*1.5,0,Math.PI*2); ctx.fill();
+    function draw() {{
+        ctx.clearRect(0,0,canvas.clientWidth, canvas.clientHeight);
+        for(const s of stars){{
+            ctx.beginPath();
+            ctx.globalAlpha = 0.5 + 0.5*Math.sin(t*s.blinkSpeed*50 + s.a*10);
+            ctx.fillStyle = 'white';
+            ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+            ctx.fill();
         }}
-        t++; requestAnimationFrame(draw);
+        ctx.globalAlpha = 1;
+        t++;
+        requestAnimationFrame(draw);
     }}
     draw();
     </script>
     """
     components.html(html, height=height+20)
+
 
 # -------------------------
 # Sidebar: model loader
@@ -218,10 +260,14 @@ with tab1:
             num_cols, cat_cols = [], []
 
         with st.expander("🪐 Numeric Features", expanded=True):
-            numeric_inputs = {col: st.number_input(col, value=0.0, format="%.4f", key=f"num_{col}") for col in num_cols}
+         for col in num_cols:
+             st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
+             numeric_inputs[col] = st.number_input("", value=0.0, format="%.4f", key=f"num_{col}")
 
-        with st.expander("🛸 Categorical Features", expanded=False):
-            categorical_inputs = {col: st.text_input(col, value="missing", key=f"cat_{col}") for col in cat_cols}
+with st.expander("🛸 Categorical Features", expanded=False):
+        for col in cat_cols:
+            st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
+            categorical_inputs[col] = st.text_input("", value="missing", key=f"cat_{col}")
 
         if st.button("Predict with current inputs"):
             try:
@@ -387,3 +433,4 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
