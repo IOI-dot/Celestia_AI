@@ -251,8 +251,11 @@ tab1, tab2, tab3 = st.tabs(["🔮 Predict", "🔧 Retrain", "📊 Insights"])
 with tab1:
     st.header("Predict — Full-featured manual input & Batch CSV")
     st.markdown("Provide values for **all features expected by the model** or upload a CSV for batch prediction.")
+
+    # Initialize input dictionaries
     numeric_inputs = {}
     categorical_inputs = {}
+
     if gb_pipeline and le:
         try:
             num_cols, cat_cols = get_expected_columns_from_pipeline(gb_pipeline)
@@ -260,17 +263,19 @@ with tab1:
             st.error(f"Could not extract expected features: {e}")
             num_cols, cat_cols = [], []
 
+        # Numeric features input
         with st.expander("🪐 Numeric Features", expanded=True):
             for col in num_cols:
-              st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
-              numeric_inputs[col] = st.number_input("", value=0.0, format="%.4f", key=f"num_{col}")
+                st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
+                numeric_inputs[col] = st.number_input("", value=0.0, format="%.4f", key=f"num_{col}")
 
-         with st.expander("🛸 Categorical Features", expanded=False):
+        # Categorical features input
+        with st.expander("🛸 Categorical Features", expanded=False):
             for col in cat_cols:
-              st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
-              categorical_inputs[col] = st.text_input("", value="missing", key=f"cat_{col}")
+                st.markdown(f"<div style='font-size:18px;font-weight:500;color:#e6f0ff'>{col}</div>", unsafe_allow_html=True)
+                categorical_inputs[col] = st.text_input("", value="missing", key=f"cat_{col}")
 
-
+        # Predict button
         if st.button("Predict with current inputs"):
             try:
                 df_input = pd.DataFrame([{**numeric_inputs, **categorical_inputs}])
@@ -291,6 +296,7 @@ with tab1:
                 st.error(f"Prediction failed: {e}")
 
     st.markdown("---")
+    
     # Batch CSV upload
     st.subheader("Batch prediction (CSV upload)")
     upload_csv = st.file_uploader("Upload CSV (K2-style or minimal 3 cols)", type=["csv"], key="batch_predict")
@@ -315,8 +321,10 @@ with tab1:
 
             csv_out = results.to_csv(index=False).encode("utf-8")
             st.download_button("Download predictions CSV", data=csv_out, file_name="predictions.csv", mime="text/csv")
+
         except Exception as e:
             st.error(f"Batch prediction failed: {e}")
+
 
 # -------------------------
 # RETRAIN TAB
@@ -435,5 +443,6 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
