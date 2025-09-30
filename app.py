@@ -141,12 +141,61 @@ def align_features(X_new, model):
 
     return Xp
 
+def render_fullscreen_starfield():
+    html = """
+    <canvas id="fullscreen-stars" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;"></canvas>
+    <script>
+    const canvas = document.getElementById('fullscreen-stars');
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+        canvas.width = window.innerWidth * devicePixelRatio;
+        canvas.height = window.innerHeight * devicePixelRatio;
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const stars = [];
+    const nStars = 500; // more stars
+    for(let i=0;i<nStars;i++){
+        stars.push({
+            x: Math.random()*canvas.width/devicePixelRatio,
+            y: Math.random()*canvas.height/devicePixelRatio,
+            r: Math.random()*2+0.5,
+            blinkSpeed: 0.001 + Math.random()*0.002, // slower blinking
+            phase: Math.random()*Math.PI*2,
+            maxAlpha: 0.8 + Math.random()*0.2
+        });
+    }
+
+    let t = 0;
+    function draw(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+
+        for(const s of stars){
+            ctx.beginPath();
+            let alpha = s.maxAlpha * (0.5 + 0.5*Math.sin(t*s.blinkSpeed*100 + s.phase));
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = 'white';
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        ctx.globalAlpha = 1;
+        t++;
+        requestAnimationFrame(draw);
+    }
+    draw();
+    </script>
+    """
+    components.html(html, height=0)  # height 0 because canvas is full-page
 
 
 # -------------------------
 # Animated hero + starfield
 # -------------------------
-def render_animated_hero(height=400):
+def render_animated_hero(height=800):
     html = f"""
     <div style="position:relative;width:100%;height:{height}px;overflow:hidden;border-radius:12px;margin-bottom:10px;">
       <canvas id="starfield" style="width:100%;height:100%;display:block;"></canvas>
@@ -470,6 +519,7 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
 
