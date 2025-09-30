@@ -192,7 +192,6 @@ def render_fullscreen_starfield():
     components.html(html, height=0)
 import streamlit as st
 import streamlit.components.v1 as components
-
 def render_animated_hero(height=800):
     html = f"""
     <div style="position:relative;width:100%;height:{height}px;overflow:visible;border-radius:12px;margin-bottom:10px;">
@@ -217,7 +216,7 @@ def render_animated_hero(height=800):
     <script>
     const canvas = document.getElementById('hero-starfield');
     const ctx = canvas.getContext('2d');
-    
+
     function resize() {{
         canvas.width = canvas.clientWidth*devicePixelRatio;
         canvas.height = canvas.clientHeight*devicePixelRatio;
@@ -241,19 +240,17 @@ def render_animated_hero(height=800):
 
     // Planets
     const planets = [];
-    const nPlanets = 8;  // more planets
+    const nPlanets = 8;
     const baseRadius = 150;
-    for(let i=0;i<nPlanets;i++){
-     planets.push({{
-      radius: baseRadius + i*60,
-      size: 5 + Math.random()*5,
-      speed: 0.004 + Math.random()*0.01,
-      color: 'hsl(' + (Math.random()*360) + ',70%,70%)',
-      angle: Math.random()*2*Math.PI
-    }});
-
-   }
-
+    for(let i=0;i<nPlanets;i++){{
+        planets.push({{
+            radius: baseRadius + i*60,
+            size: 3 + Math.random()*4,
+            speed: 0.004 + Math.random()*0.01,
+            color: 'hsl(' + (Math.random()*360) + ',70%,70%)',
+            angle: Math.random()*2*Math.PI
+        }});
+    }}
 
     let t=0;
     function draw(){{
@@ -290,6 +287,7 @@ def render_animated_hero(height=800):
     </script>
     """
     components.html(html, height=height+20)
+
 
 # Example usage
 render_animated_hero(height=800)
@@ -537,6 +535,7 @@ with tab3:
 
     st.markdown("---")
     st.write("🌍 Built for NASA Space Apps Challenge 2025 — explore exoplanets with AI 🚀")
+
 
 
 
