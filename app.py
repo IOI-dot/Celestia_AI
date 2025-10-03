@@ -408,7 +408,8 @@ with tab1:
                         border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
                 <h3 style='margin:0;'>🚀 Batch Exoplanet Analysis</h3>
                 <p style='color:#b2c5ff;margin-top:10px;'>
-                    Upload a CSV with the <b>10 Kepler features</b>. Or analyze 10 random rows from the bundled sample CSV.
+                    Upload a CSV with the <b>10 Kepler features</b> — or click the blue button to analyze
+                    <b>10 random rows</b> from the <u>default dataset</u> bundled in the app.
                 </p>
             </div>
             """,
@@ -423,72 +424,90 @@ with tab1:
 
     # internal df holder
     df = None
-    used_sample = False
+    used_source = None  # "uploaded" | "default"
 
-    # Load from upload
+    # Try reading uploaded CSV
     if uploaded_file:
         try:
             df = pd.read_csv(uploaded_file, comment="#")
             df.columns = df.columns.str.strip()
+            used_source = "uploaded"
             st.success(f"✅ Loaded {len(df)} rows from uploaded file")
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
-    # If no upload, show helper to analyze 10 rows from bundled CSV
-    if df is None:
-        st.markdown(
-            "<div style='margin-top:8px;margin-bottom:12px;'>Or:</div>",
-            unsafe_allow_html=True,
-        )
-        cbtn = st.columns([1, 1, 1])
-        with cbtn[1]:
-            if st.button("🔵 Analyze 10 Rows From Sample CSV", use_container_width=True, type="primary"):
+    # Blue action button: analyze 10 rows from default dataset immediately
+    cbtn = st.columns([1, 1, 1])
+    with cbtn[1]:
+        if st.button("🔵 Analyze 10 Rows From Default Dataset", use_container_width=True, type="primary"):
+            if pipeline is None or label_encoder is None:
+                st.error("Model artifacts not loaded. Upload valid .joblib files in the sidebar.")
+            else:
                 try:
-                    df_sample = pd.read_csv(SAMPLE_CSV_PATH)
-                    df_sample.columns = df_sample.columns.str.strip()
-                    if len(df_sample) >= 10:
-                        df = df_sample.sample(10, random_state=np.random.randint(0, 1_000_000)).reset_index(drop=True)
-                        used_sample = True
-                        st.success("✅ Took 10 random rows from the bundled sample CSV.")
+                    df_default = pd.read_csv(SAMPLE_CSV_PATH)
+                    df_default.columns = df_default.columns.str.strip()
+                    if len(df_default) < 10:
+                        st.error("Default dataset has fewer than 10 rows.")
                     else:
-                        st.error("Sample CSV has fewer than 10 rows.")
+                        df = df_default.sample(10, random_state=np.random.randint(0, 1_000_000)).reset_index(drop=True)
+                        used_source = "default"
+                        # Run analysis immediately
+                        with st.spinner("Analyzing 10 rows from the default dataset..."):
+                            X = align_features_df(df)
+                            preds = pipeline.predict(X)
+                            probas = pipeline.predict_proba(X)
+                            labels = decode_labels(preds, label_encoder)
+                            results = df.copy()
+                            results["prediction"] = labels
+                            results["confidence"] = (probas.max(axis=1) * 100).round(2)
+                            try:
+                                classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]))
+                                confirmed_idx = classes.index("CONFIRMED")
+                            except ValueError:
+                                confirmed_idx = -1
+                            results["confirmed_prob"] = (
+                                (probas[:, confirmed_idx] * 100).round(2)
+                                if confirmed_idx >= 0
+                                else (probas.max(axis=1) * 100).round(2)
+                            )
+                            st.session_state["results"] = results
+                        st.success("✅ Analysis complete! Processed 10 rows from the default dataset.")
                 except Exception as e:
-                    st.error(f"Could not load the bundled sample CSV: {e}")
+                    st.error(f"Could not load the default dataset: {e}")
 
-    # If we have df (either uploaded or sampled), run analysis
-    if df is not None and pipeline is not None and label_encoder is not None:
+    # If we have df (uploaded) and artifacts, allow a normal analysis run
+    if df is not None and used_source == "uploaded":
         with st.expander("📋 Dataset Preview (up to 10 rows)", expanded=True):
             st.dataframe(df.head(10), use_container_width=True)
 
         c1r, c2r, c3r = st.columns([1, 1, 1])
         with c2r:
             if st.button("🔬 Run Analysis", use_container_width=True, type="primary"):
-                with st.spinner("Analyzing candidates..."):
-                    progress_bar = st.progress(0)
-                    X = align_features_df(df)
-                    progress_bar.progress(30)
-                    preds = pipeline.predict(X)
-                    probas = pipeline.predict_proba(X)
-                    progress_bar.progress(70)
-                    labels = decode_labels(preds, label_encoder)
-                    results = df.copy()
-                    results["prediction"] = labels
-                    results["confidence"] = (probas.max(axis=1) * 100).round(2)
-                    try:
-                        classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]))
-                        confirmed_idx = classes.index("CONFIRMED")
-                    except ValueError:
-                        confirmed_idx = -1
-                    results["confirmed_prob"] = (
-                        (probas[:, confirmed_idx] * 100).round(2) if confirmed_idx >= 0 else (probas.max(axis=1) * 100).round(2)
-                    )
-                    progress_bar.progress(100)
-                    st.session_state["results"] = results
-                    msg_source = "sample CSV" if used_sample else "uploaded CSV"
-                    st.success(f"✅ Analysis complete! Processed {len(results)} rows from {msg_source}.")
-                    time.sleep(0.2)
+                if pipeline is None or label_encoder is None:
+                    st.error("Model artifacts not loaded. Upload valid .joblib files in the sidebar.")
+                else:
+                    with st.spinner("Analyzing candidates..."):
+                        X = align_features_df(df)
+                        preds = pipeline.predict(X)
+                        probas = pipeline.predict_proba(X)
+                        labels = decode_labels(preds, label_encoder)
+                        results = df.copy()
+                        results["prediction"] = labels
+                        results["confidence"] = (probas.max(axis=1) * 100).round(2)
+                        try:
+                            classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]))
+                            confirmed_idx = classes.index("CONFIRMED")
+                        except ValueError:
+                            confirmed_idx = -1
+                        results["confirmed_prob"] = (
+                            (probas[:, confirmed_idx] * 100).round(2)
+                            if confirmed_idx >= 0
+                            else (probas.max(axis=1) * 100).round(2)
+                        )
+                        st.session_state["results"] = results
+                        st.success(f"✅ Analysis complete! Processed {len(results)} rows from uploaded CSV.")
 
-    # Show results / controls
+    # Show results (from either path)
     if "results" in st.session_state:
         results = st.session_state["results"]
         st.markdown("### 📊 Analysis Summary")
@@ -532,7 +551,6 @@ with tab1:
         )
     elif pipeline is None or label_encoder is None:
         st.info("Upload model artifacts from the sidebar to enable analysis.")
-
 # -------------------------
 # Tab 2: Quick Classify (human-readable names, no defaults)
 # -------------------------
@@ -904,4 +922,5 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
