@@ -1,125 +1,223 @@
-# ExoHunter AI (Kepler 10-feature edition) — Streamlit app
-# Integrates trained pipeline: kepler_gb_pipeline_weighted.joblib + kepler_label_encoder.joblib
-# Beautiful UI, robust fallbacks, batch + single classify, visuals
+# Celestia AI — Exoplanet Discovery Suite
+# Elegant UI: centered hero with orbiting planets + twinkling stars, soft slate boxes,
+# researcher-grade features: data ingest, training, hyperparameter tuning, metrics, thresholding, classification & export.
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import io
+import json
 import time
 import warnings
+from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder, label_binarize
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+    precision_recall_fscore_support,
+    brier_score_loss,
+)
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.calibration import calibration_curve
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # =========================
 # Page Configuration
 # =========================
 st.set_page_config(
-    page_title="ExoHunter AI - NASA Exoplanet Detection",
+    page_title="Celestia AI — Exoplanet Discovery Suite",
     layout="wide",
-    page_icon="🌌",
-    initial_sidebar_state="expanded"
+    page_icon="✨",
+    initial_sidebar_state="expanded",
 )
 
 # =========================
-# Fixed CSS / Theme
+# CSS — soft palette, centered hero, rotating planets, twinkling stars
 # =========================
-def inject_custom_css():
+def inject_css_and_space_layers():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
+      :root{
+        --bg-1:#0b1220;         /* deep night blue */
+        --bg-2:#0e1726;         /* ink */
+        --card:#121a2b;         /* soft slate */
+        --card-2:#1a2436;       /* slightly lighter slate */
+        --stroke:rgba(255,255,255,.12);
+        --white:#ffffff;
+        --muted:#cfe3ff;
+        --accent:#86e1ff;       /* sky/teal */
+        --accent-2:#a78bfa;     /* soft violet */
+        --accent-3:#34d399;     /* mint */
+      }
 
-        .stApp { background: linear-gradient(-45deg, #0a0118, #1a0033, #0f0c29, #24243e);
-                 background-size: 400% 400%; animation: gradientShift 15s ease infinite; }
-        @keyframes gradientShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+      .stApp { background: radial-gradient(1200px 800px at 50% -10%, #101b31 0%, var(--bg-1) 35%, var(--bg-2) 100%); }
+      .main .block-container { padding-top: 0.8rem; position:relative; z-index:10; }
 
-        .stars{ position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none;
-                background-image:
-                    radial-gradient(2px 2px at 20px 30px, white, transparent),
-                    radial-gradient(2px 2px at 40px 70px, white, transparent),
-                    radial-gradient(1px 1px at 50px 50px, white, transparent),
-                    radial-gradient(1px 1px at 80px 10px, white, transparent),
-                    radial-gradient(2px 2px at 130px 80px, white, transparent);
-                background-repeat: repeat; background-size:200px 200px;
-                animation: stars 10s linear infinite; opacity:0.3; z-index:0; }
-        @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-200px);} }
+      /* Global typography — all headings/labels white */
+      h1,h2,h3,h4,h5,h6,
+      label, .stMarkdown, .stText, .stCaption, .stSelectbox, .stNumberInput, .stFileUploader,
+      .stRadio, .stCheckbox, .stMetric-value, .stMetric-label { color: var(--white) !important; }
 
-        .main .block-container { position:relative; z-index:10; padding-top:2rem; }
+      /* Hero with orbits */
+      .celestia-hero {
+        position: relative;
+        height: 260px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        margin-bottom: 12px;
+      }
+      .celestia-hero .title-wrap {
+        position: relative;
+        z-index: 5;
+        text-align: center;
+      }
+      .celestia-hero h1 {
+        margin: 0;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        font-size: clamp(36px, 4.4vw, 64px);
+        color: var(--white);
+        text-shadow: 0 8px 26px rgba(134,225,255,.25);
+      }
+      .celestia-hero p {
+        margin: 6px 0 0 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
 
-        h1 { font-family:'Orbitron', monospace !important; font-weight:900 !important;
-             background: linear-gradient(120deg, #00ffff, #ff00ff, #00ffff);
-             background-size:200% auto; background-clip:text; -webkit-background-clip:text;
-             -webkit-text-fill-color:transparent; animation: shine 3s linear infinite;
-             text-align:center; font-size:3rem !important; margin-bottom:2rem !important;
-             text-shadow:0 0 30px rgba(0,255,255,0.5); }
-        @keyframes shine { to { background-position: 200% center; } }
+      /* Orbits */
+      .orbits {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        z-index: 2;
+        pointer-events: none;
+        filter: drop-shadow(0 8px 20px rgba(0,0,0,.35));
+      }
+      .orbit {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px dashed rgba(255,255,255,.12);
+        animation: spin linear infinite;
+      }
+      .orbit-1 { width: 260px; height: 260px; animation-duration: 38s; }
+      .orbit-2 { width: 340px; height: 340px; animation-duration: 56s; animation-direction: reverse; }
+      .orbit-3 { width: 420px; height: 420px; animation-duration: 84s; }
 
-        h2,h3 { font-family:'Space Grotesk', sans-serif !important; color:#e0e0ff !important;
-                text-shadow:0 0 10px rgba(100,100,255,0.3); }
+      /* Planets that ride the orbit (placed on the right edge; orbit rotates) */
+      .planet {
+        position: absolute;
+        top: 50%;
+        right: -10px;
+        transform: translateY(-50%);
+        border-radius: 50%;
+        box-shadow: 0 0 0 2px rgba(255,255,255,.06) inset, 0 6px 14px rgba(0,0,0,.35);
+      }
+      .planet-1 { width: 14px; height:14px; background: linear-gradient(145deg,#8bdcf7,#4fb6ff); }
+      .planet-2 { width: 18px; height:18px; background: linear-gradient(145deg,#bda8ff,#8f79f6); right: -12px; }
+      .planet-3 { width: 10px; height:10px; background: linear-gradient(145deg,#6fe7bf,#36c79d); right:-8px; }
 
-        .stTabs [data-baseweb="tab-list"] { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
-                                            border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.1);}
-        .stTabs [data-baseweb="tab"] { color:#a0a0ff !important; font-family:'Space Grotesk', sans-serif !important;
-                                       font-weight:600; transition: all .3s ease; }
-        .stTabs [aria-selected="true"] { background: linear-gradient(90deg, rgba(0,255,255,0.2), rgba(255,0,255,0.2));
-                                         border-radius:10px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
-        .stTextInput input, .stNumberInput input, .stSelectbox select {
-            background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(0,255,255,0.3) !important;
-            color:#fff !important; border-radius:10px !important; backdrop-filter: blur(5px);
-            transition: all .3s ease;
-        }
-        .stTextInput input:focus, .stNumberInput input:focus {
-            border-color:#00ffff !important; box-shadow:0 0 20px rgba(0,255,255,0.3) !important;
-        }
+      /* Starfields (two layers with phase-shifted twinkle) */
+      .starfield {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-repeat: repeat;
+        z-index: 0;
+        opacity: .45;
+        animation: twinkle 14s ease-in-out infinite;
+        filter: brightness(1);
+      }
+      .starfield.layer2 { animation-duration: 18s; opacity: .35; }
+      .starfield.layer3 { animation-duration: 22s; opacity: .25; }
 
-        .stButton > button {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); color:white; border:none;
-            padding:10px 30px; border-radius:30px; font-weight:700; font-family:'Space Grotesk', sans-serif;
-            transition: all .3s ease; box-shadow:0 4px 15px rgba(102,126,234,0.3);
-        }
-        .stButton > button:hover { transform: translateY(-2px); box-shadow:0 6px 25px rgba(102,126,234,0.5); }
+      .starfield {
+        background-image:
+          radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,.9) 0, transparent 55%),
+          radial-gradient(1px 1px at 52% 78%, rgba(255,255,255,.85) 0, transparent 55%),
+          radial-gradient(1px 1px at 84% 32%, rgba(255,255,255,.8) 0, transparent 55%),
+          radial-gradient(2px 2px at 22% 66%, rgba(255,255,255,.9) 0, transparent 60%),
+          radial-gradient(1.5px 1.5px at 72% 12%, rgba(255,255,255,.85) 0, transparent 60%),
+          radial-gradient(1.5px 1.5px at 32% 44%, rgba(255,255,255,.9) 0, transparent 60%);
+        background-size: 320px 320px, 480px 480px, 640px 640px, 540px 540px, 720px 720px, 600px 600px;
+        background-position: 0px 0px, 60px 80px, -40px 120px, 80px -60px, -100px 40px, 120px -40px;
+      }
+      @keyframes twinkle {
+        0%   { filter: brightness(0.9); }
+        50%  { filter: brightness(1.12); }
+        100% { filter: brightness(0.9); }
+      }
 
-        .stAlert { background: rgba(255,255,255,0.05) !important; backdrop-filter: blur(10px);
-                   border:1px solid rgba(255,255,255,0.2); border-radius:15px; animation: slideIn .5s ease; }
-        @keyframes slideIn { from {opacity:0; transform: translateY(-20px);} to{opacity:1; transform: translateY(0);} }
+      /* Cards / widgets: soft, comfortable contrast */
+      .cel-card {
+        background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
+        border: 1px solid var(--stroke);
+        border-radius: 14px;
+        padding: 14px 16px;
+      }
+      .cel-card.pad-lg { padding: 18px 18px; }
 
-        [data-testid="metric-container"] { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
-                                           border:1px solid rgba(255,255,255,0.1); padding:15px; border-radius:15px;
-                                           box-shadow:0 4px 15px rgba(0,0,0,0.2); }
+      /* Tabs look */
+      .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+      .stTabs [data-baseweb="tab"] {
+        background: rgba(255,255,255,.06);
+        color: var(--white);
+        border: 1px solid var(--stroke); border-radius: 12px; padding: 6px 10px;
+      }
+      .stTabs [aria-selected="true"] { background: rgba(255,255,255,.12); }
 
-        [data-testid="stFileUploadDropzone"] { background: rgba(255,255,255,0.03);
-                                               border:2px dashed rgba(0,255,255,0.3); border-radius:15px; transition:.3s; }
-        [data-testid="stFileUploadDropzone"]:hover { background: rgba(0,255,255,0.05); border-color: rgba(0,255,255,0.6); }
+      /* File uploader + metrics */
+      [data-testid="stFileUploadDropzone"] {
+        background: rgba(255,255,255,.05); border: 2px dashed var(--stroke); border-radius: 14px;
+      }
+      [data-testid="stMetric"]{
+        background: rgba(255,255,255,.05); border: 1px solid var(--stroke); border-radius: 12px; padding: 10px;
+      }
 
-        .stProgress > div > div > div { background: linear-gradient(90deg, #00ffff, #ff00ff);
-                                         border-radius:10px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.8} }
+      /* Buttons */
+      .stButton > button {
+        background: linear-gradient(90deg, #74c7ff 0%, #8f79f6 100%);
+        border: none; color:#fff; font-weight:700; border-radius:12px; padding: 10px 22px;
+        box-shadow: 0 6px 16px rgba(116,199,255,.22);
+      }
+      .stDownloadButton > button {
+        background: rgba(255,255,255,.06); color:#fff; border:1px solid var(--stroke); border-radius:12px;
+      }
 
-        #MainMenu, header, footer { visibility: hidden; }
+      /* Dataframe table soft edges */
+      .stDataFrame, .stTable { background: rgba(255,255,255,.03); border-radius: 12px; }
 
-        ::-webkit-scrollbar { width:10px; background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #764ba2); border-radius:10px; }
-
-        .streamlit-expanderHeader { background: rgba(255,255,255,0.05) !important; border-radius:10px !important; }
+      /* Hide default menu/footer */
+      #MainMenu, header, footer { visibility: hidden; }
     </style>
-    <div class="stars"></div>
+
+    <!-- star layers -->
+    <div class="starfield layer1"></div>
+    <div class="starfield layer2"></div>
+    <div class="starfield layer3"></div>
     """, unsafe_allow_html=True)
 
-inject_custom_css()
+inject_css_and_space_layers()
 
 # =========================
-# Constants / Features
+# Constants
 # =========================
-# EXACT 10 features your model was trained on
+APP_TITLE = "Celestia AI"
+APP_SUBTITLE = "Exoplanet Discovery Suite"
 SELECTED_FEATURES = [
     "koi_score",
     "koi_fpflag_nt",
@@ -132,657 +230,519 @@ SELECTED_FEATURES = [
     "koi_prad",
     "koi_period",
 ]
+TARGET_COLUMNS_CANDIDATES = ["koi_disposition", "disposition", "label"]
 
 # =========================
-# Smart Demo Model (fallback)
+# Session State
 # =========================
-class SmartDummyModel:
-    """Fallback model that mimics plausible behavior on the 10 Kepler features."""
-    def __init__(self, classes=None):
-        self.classes_ = np.array(classes or ["FALSE POSITIVE","CANDIDATE","CONFIRMED"])
-        np.random.seed(42)
+if "data_store" not in st.session_state:
+    st.session_state["data_store"] = pd.DataFrame(columns=SELECTED_FEATURES + ["koi_disposition"])
+if "pipeline" not in st.session_state:
+    st.session_state["pipeline"] = None
+if "label_encoder" not in st.session_state:
+    st.session_state["label_encoder"] = None
+if "metrics" not in st.session_state:
+    st.session_state["metrics"] = {}
+if "last_train_time" not in st.session_state:
+    st.session_state["last_train_time"] = None
 
-    def _score_row(self, row):
-        score = 0.0
-        # higher koi_score good
-        score += float(row.get("koi_score", 0)) * 2.0
-        # strong signal-to-noise
-        snr = float(row.get("koi_model_snr", 0))
-        if snr > 25: score += 2.5
-        elif snr > 15: score += 1.5
-        # plausible impact parameter
-        imp = float(row.get("koi_impact", 0))
-        if 0.1 <= imp <= 0.9: score += 1.0
-        # reasonable duration & period (very rough heuristics)
-        dur = float(row.get("koi_duration", 0))
-        if 2 <= dur <= 20: score += 1.0
-        period = float(row.get("koi_period", 0))
-        if 0.5 <= period <= 400: score += 1.0
-        # radius in a reasonable range
-        prad = float(row.get("koi_prad", 0))
-        if 0.8 <= prad <= 2.5: score += 2.0
-        elif prad <= 4.0: score += 0.5
-        # penalize certain FP flags
-        for f in ["koi_fpflag_co","koi_fpflag_ss","koi_fpflag_ec"]:
-            if int(row.get(f, 0)) == 1: score -= 1.0
-        # NT flag = not transit like (0 means OK), so prefer 0
-        if int(row.get("koi_fpflag_nt", 0)) == 0: score += 0.5
-        # noise
-        score += np.random.normal(0, 0.4)
-        return score
+# =========================
+# Hero with center title + rotating planets
+# =========================
+def render_hero():
+    st.markdown(f"""
+    <section class="celestia-hero">
+      <div class="orbits">
+        <div class="orbit orbit-1"><div class="planet planet-1"></div></div>
+        <div class="orbit orbit-2"><div class="planet planet-2"></div></div>
+        <div class="orbit orbit-3"><div class="planet planet-3"></div></div>
+      </div>
+      <div class="title-wrap">
+        <h1>{APP_TITLE}</h1>
+        <p>{APP_SUBTITLE}</p>
+      </div>
+    </section>
+    """, unsafe_allow_html=True)
 
-    def predict(self, X):
-        preds = []
-        for _, r in pd.DataFrame(X, columns=SELECTED_FEATURES).iterrows():
-            s = self._score_row(r)
-            if s >= 5.5: preds.append(2)   # CONFIRMED
-            elif s >= 2.0: preds.append(1) # CANDIDATE
-            else: preds.append(0)          # FALSE POSITIVE
-        return np.array(preds)
+render_hero()
 
-    def predict_proba(self, X):
-        y = self.predict(X)
-        n = len(y); k = len(self.classes_)
-        P = np.zeros((n,k))
-        for i, c in enumerate(y):
-            base = np.random.dirichlet(np.ones(k)*0.7)
-            base[c] += 0.6
-            P[i] = base / base.sum()
-        return P
+# =========================
+# Utility functions
+# =========================
+def coerce_and_align(df: pd.DataFrame) -> pd.DataFrame:
+    X = df.copy()
+    for col in SELECTED_FEATURES:
+        if col not in X.columns:
+            X[col] = 0
+        X[col] = pd.to_numeric(X[col], errors="coerce").fillna(0.0)
+    return X[SELECTED_FEATURES]
 
-def create_label_encoder():
-    le = LabelEncoder()
-    le.fit(['FALSE POSITIVE', 'CANDIDATE', 'CONFIRMED'])
+def find_target_column(df: pd.DataFrame) -> str | None:
+    for c in TARGET_COLUMNS_CANDIDATES:
+        if c in df.columns:
+            return c
+    return None
+
+def build_pipeline(params: dict) -> Pipeline:
+    numeric_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="constant", fill_value=0)),
+        ("scaler", StandardScaler()),
+    ])
+    preprocessor = ColumnTransformer(transformers=[("num", numeric_transformer, SELECTED_FEATURES)])
+    kwargs = dict(
+        learning_rate=params["learning_rate"],
+        max_iter=params["max_iter"],
+        max_depth=params["max_depth"],
+        min_samples_leaf=params["min_samples_leaf"],
+        l2_regularization=params["l2_regularization"],
+        early_stopping=params["early_stopping"],
+        validation_fraction=params["validation_fraction"],
+        n_iter_no_change=params["n_iter_no_change"],
+        random_state=42,
+    )
+    if params.get("class_weight"):
+        try:
+            clf = HistGradientBoostingClassifier(**kwargs, class_weight=params["class_weight"])
+        except TypeError:
+            clf = HistGradientBoostingClassifier(**kwargs)
+    else:
+        clf = HistGradientBoostingClassifier(**kwargs)
+    return Pipeline(steps=[("preprocessor", preprocessor), ("classifier", clf)])
+
+def ensure_label_encoder(le: LabelEncoder | None, y_values: pd.Series | list) -> LabelEncoder:
+    if le is None:
+        le = LabelEncoder()
+        le.fit(sorted(pd.Series(y_values).astype(str).unique()))
     return le
 
-# =========================
-# Load your trained artifacts (safe)
-# =========================
-@st.cache_resource
-def load_model_safe(file_or_path):
+def compute_metrics(y_true, y_pred, proba, classes_):
+    report = classification_report(y_true, y_pred, target_names=classes_, output_dict=True, zero_division=0)
+    cm = confusion_matrix(y_true, y_pred, labels=range(len(classes_)))
+    y_true_bin = label_binarize(y_true, classes=range(len(classes_)))
     try:
-        return joblib.load(file_or_path)
+        auc_ovr = roc_auc_score(y_true_bin, proba, average="macro", multi_class="ovr")
+    except Exception:
+        auc_ovr = np.nan
+    briers = []
+    for i in range(len(classes_)):
+        briers.append(brier_score_loss(y_true_bin[:, i], proba[:, i]))
+    brier_macro = float(np.mean(briers))
+    return report, cm, auc_ovr, brier_macro
+
+def plot_confusion_matrix(cm, classes_):
+    df_cm = pd.DataFrame(cm, index=classes_, columns=classes_)
+    fig = px.imshow(
+        df_cm, text_auto=True, aspect="auto",
+        color_continuous_scale=[ "#0e1726", "#20304b", "#31507a", "#3b82f6" ],
+        title="Confusion Matrix"
+    )
+    fig.update_layout(template="plotly_dark", height=420, margin=dict(l=20,r=20,t=50,b=10))
+    return fig
+
+def plot_calibration(proba, y_true, classes_):
+    fig = go.Figure()
+    y_true_bin = label_binarize(y_true, classes=range(len(classes_)))
+    palette = ["#86e1ff", "#a78bfa", "#34d399"]
+    for i, name in enumerate(classes_):
+        frac_pos, mean_pred = calibration_curve(y_true_bin[:, i], proba[:, i], n_bins=10, strategy="quantile")
+        fig.add_trace(go.Scatter(x=mean_pred, y=frac_pos, mode="lines+markers", name=f"{name}", line=dict(width=2), marker=dict(size=6)))
+    fig.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Perfect", line=dict(dash="dash", width=1.5)))
+    fig.update_layout(title="Calibration (Reliability) Curves", xaxis_title="Mean Predicted Probability", yaxis_title="Fraction of Positives",
+                      template="plotly_dark", height=420, legend=dict(orientation="h"))
+    return fig
+
+def plot_feature_importance(pipeline: Pipeline):
+    try:
+        clf = pipeline.named_steps["classifier"]
+        importances = getattr(clf, "feature_importances_", None)
+        if importances is None:
+            return None
+        s = pd.Series(importances, index=SELECTED_FEATURES).sort_values(ascending=True)
+        fig = px.bar(
+            x=s.values, y=s.index, orientation="h",
+            title="Feature Importances", color=s.values,
+            color_continuous_scale=[ "#a7f3d0", "#6ee7b7", "#34d399", "#10b981" ]
+        )
+        fig.update_layout(template="plotly_dark", height=420, xaxis_title="Importance", yaxis_title="", coloraxis_showscale=False)
+        return fig
     except Exception:
         return None
 
-# =========================
-# Header
-# =========================
-def show_header():
-    st.markdown("""
-        <h1 style='text-align:center;margin-bottom:0;'>🌌 ExoHunter AI</h1>
-        <p style='text-align:center;color:#a0a0ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:0;'>
-            Advanced Exoplanet Detection System • NASA Space Apps 2025
-        </p>
-        <div style='text-align:center;margin:20px 0;'>
-            <span style='background:linear-gradient(90deg,#667eea,#764ba2);padding:5px 15px;border-radius:20px;color:#fff;font-size:.9rem;font-family:Space Grotesk;'>
-                Powered by Your Kepler 10-Feature Model
-            </span>
-        </div>
-    """, unsafe_allow_html=True)
+def save_artifacts(pipeline, label_encoder):
+    joblib.dump(pipeline, "celestia_pipeline.joblib")
+    joblib.dump(label_encoder, "celestia_label_encoder.joblib")
 
-show_header()
+def load_artifacts():
+    try:
+        return joblib.load("kepler_gb_pipeline_weighted.joblib"), joblib.load("kepler_label_encoder.joblib")
+    except Exception:
+        try:
+            return joblib.load("celestia_pipeline.joblib"), joblib.load("celestia_label_encoder.joblib")
+        except Exception:
+            return None, None
 
 # =========================
-# Sidebar: Model Controls
+# Sidebar — Global controls
 # =========================
 with st.sidebar:
-    st.markdown("""
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
-                    border-radius:15px;margin-bottom:20px;border:1px solid rgba(0,255,255,0.3);'>
-            <h2 style='margin:0;font-size:1.5rem;'>🚀 Control Panel</h2>
-        </div>
-    """, unsafe_allow_html=True)
-
-    with st.expander("🔧 Model Configuration", expanded=True):
-        # Allow uploading alternative pipeline/encoder if desired
-        model_upload = st.file_uploader("Upload Pipeline (.joblib)", type=['joblib'], key='model')
-        encoder_upload = st.file_uploader("Upload Encoder (.joblib)", type=['joblib'], key='encoder')
-
-        use_demo = st.checkbox('🎮 Demo Mode (use synthetic/randomized predictions if no model found)', value=False)
-        debug_mode = st.checkbox('🔍 Debug Mode', value=False, help="Show technical details in sidebar")
-
-    # Load priority: uploaded -> local -> fallback
-    pipeline = None
-    label_encoder = None
-
-    if model_upload and encoder_upload:
-        pipeline = load_model_safe(model_upload)
-        label_encoder = load_model_safe(encoder_upload)
-        if pipeline and label_encoder:
-            st.success("✅ Custom artifacts loaded (uploaded).")
-    else:
-        # Try your saved filenames from training script
-        pipeline = load_model_safe('kepler_gb_pipeline_weighted.joblib')
-        label_encoder = load_model_safe('kepler_label_encoder.joblib')
-        if pipeline and label_encoder:
-            st.info("📁 Using local artifacts: kepler_gb_pipeline_weighted.joblib + kepler_label_encoder.joblib")
+    st.markdown('<div class="cel-card pad-lg"><h3 style="margin:0;">⚙️ Global Controls</h3>', unsafe_allow_html=True)
+    auto_train = st.checkbox("Auto-train on ingest", value=True, help="Retrain whenever new labeled rows are ingested.")
+    comfy_density = st.select_slider("Density", options=["Cozy","Comfy","Compact"], value="Comfy")
+    st.markdown('<hr style="border:1px solid rgba(255,255,255,.12);">', unsafe_allow_html=True)
+    if st.button("🔄 Load Artifacts (joblib)"):
+        pipe, le = load_artifacts()
+        if pipe is not None and le is not None:
+            st.session_state["pipeline"] = pipe
+            st.session_state["label_encoder"] = le
+            st.success("Artifacts loaded.")
         else:
-            # Fallback
-            pipeline = SmartDummyModel()
-            label_encoder = create_label_encoder()
-            if use_demo:
-                st.warning("⚠️ Using demo fallback model (upload/load real artifacts for production).")
-            else:
-                st.warning("⚠️ Artifacts not found — switched to demo fallback model.")
-
-    st.markdown("### 📊 System Status")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("Model", "✅ Ready" if pipeline is not None else "❌ Missing", delta="Active" if pipeline else None)
-    with c2:
-        st.metric("Features", f"{len(SELECTED_FEATURES)} used", delta="Kepler 10-feature")
-
-# =========================
-# Utilities
-# =========================
-def align_features_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Ensure the dataframe has exactly the required 10 features, numeric, in order."""
-    X = df.copy()
-    # create missing columns with sensible defaults
-    for col in SELECTED_FEATURES:
-        if col not in X.columns:
-            # FP flags are binary; others numeric
-            if col.startswith("koi_fpflag_"):
-                X[col] = 0
-            else:
-                X[col] = 0.0
-    # coerce numeric
-    for col in SELECTED_FEATURES:
-        X[col] = pd.to_numeric(X[col], errors="coerce").fillna(0.0)
-    # order
-    X = X[SELECTED_FEATURES]
-    return X
-
-def generate_demo_data(n=60) -> pd.DataFrame:
-    """Synthetic rows with those 10 features + fake labels for demos."""
-    rng = np.random.default_rng(42)
-    df = pd.DataFrame({
-        "koi_score": rng.uniform(0, 1, n),
-        "koi_fpflag_nt": rng.integers(0, 2, n),
-        "koi_model_snr": rng.normal(20, 8, n).clip(0, None),
-        "koi_fpflag_co": rng.integers(0, 2, n),
-        "koi_fpflag_ss": rng.integers(0, 2, n),
-        "koi_fpflag_ec": rng.integers(0, 2, n),
-        "koi_impact": rng.uniform(0, 1, n),
-        "koi_duration": rng.normal(10, 5, n).clip(0.5, None),
-        "koi_prad": rng.uniform(0.5, 6.0, n),
-        "koi_period": np.exp(rng.normal(np.log(30), 1.0, n)).clip(0.5, 800),
-    })
-    # lightweight label heuristic for pretty demos
-    lab = []
-    for _, r in df.iterrows():
-        s = 0
-        s += r["koi_score"] * 2 + (r["koi_model_snr"] > 20) * 1.5 + (0.1 <= r["koi_impact"] <= 0.9) * 0.8
-        s += (2 <= r["koi_duration"] <= 20) * 0.7 + (0.8 <= r["koi_prad"] <= 2.5) * 1.2 + (0.5 <= r["koi_period"] <= 400) * 0.8
-        s -= (r["koi_fpflag_co"] + r["koi_fpflag_ss"] + r["koi_fpflag_ec"]) * 0.9
-        if s >= 4.2: lab.append("CONFIRMED")
-        elif s >= 2.0: lab.append("CANDIDATE")
-        else: lab.append("FALSE POSITIVE")
-    df["disposition"] = lab
-    return df
-
-def decode_labels(y_pred_int: np.ndarray) -> np.ndarray:
-    try:
-        if hasattr(label_encoder, "inverse_transform"):
-            return label_encoder.inverse_transform(y_pred_int)
-        else:
-            classes_ = getattr(label_encoder, "classes_", np.array(["FALSE POSITIVE","CANDIDATE","CONFIRMED"]))
-            return np.array([classes_[i] for i in y_pred_int])
-    except Exception:
-        classes_ = np.array(["FALSE POSITIVE","CANDIDATE","CONFIRMED"])
-        return np.array([classes_[i] for i in y_pred_int])
+            st.warning("No compatible artifacts found.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # Tabs
 # =========================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🔍 Batch Analysis",
-    "✨ Quick Classify",
-    "🧬 Model Training (simple)",
-    "📈 Visualizations",
-    "ℹ️ About"
+tab_ingest, tab_explore, tab_train, tab_classify, tab_metrics, tab_export = st.tabs([
+    "📥 Ingest Data",
+    "🛰️ Explore",
+    "🧬 Train & Tune",
+    "🧪 Classify",
+    "📊 Metrics & Explain",
+    "📦 Export",
 ])
 
 # -------------------------
-# Tab 1: Batch Analysis
+# Ingest
 # -------------------------
-with tab1:
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.markdown("""
-            <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);
-                        border-radius:15px;margin-bottom:30px;'>
-                <h3 style='margin:0;'>🚀 Batch Exoplanet Analysis</h3>
-                <p style='color:#a0a0ff;margin-top:10px;'>
-                    Upload CSV with the <b>10 Kepler features</b> or generate demo data.
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
+with tab_ingest:
+    st.markdown('<div class="cel-card pad-lg">', unsafe_allow_html=True)
+    st.subheader("📥 Ingest CSV")
+    st.caption("Upload CSVs that include the 10 trained features. If a label column (e.g., `koi_disposition`) is present, it will be used for training.")
+    up = st.file_uploader("Upload CSV files", type=["csv"], accept_multiple_files=True)
+    col_t1, col_t2 = st.columns([1,3])
+    with col_t1:
+        if st.button("🧾 Download CSV Template"):
+            template = pd.DataFrame({c: [] for c in SELECTED_FEATURES + ["koi_disposition"]})
+            buf = io.StringIO(); template.to_csv(buf, index=False)
+            st.download_button("📥 Get Template", data=buf.getvalue(), file_name="celestia_template.csv", mime="text/csv", key="dl_temp")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("📁 Upload CSV Dataset (must include the 10 feature columns)", type=['csv'])
+    if up:
+        added = 0
+        for f in up:
+            try:
+                df = pd.read_csv(f, comment="#"); df.columns = df.columns.str.strip()
+            except Exception as e:
+                st.error(f"Failed to read {f.name}: {e}"); continue
 
-    df = None
-    if uploaded_file:
-        try:
-            df = pd.read_csv(uploaded_file, comment="#")
-            df.columns = df.columns.str.strip()
-            st.success(f"✅ Loaded {len(df)} rows from file")
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
+            target_col = find_target_column(df)
+            if target_col is None: df["koi_disposition"] = np.nan
 
-    if df is None:
-        if st.button("🎲 Generate Demo Dataset", use_container_width=True, key="gen_demo_batch"):
-            df = generate_demo_data(120)
-            st.session_state['demo_data'] = df
-            st.success("✅ Generated 120 synthetic candidates!")
-    if 'demo_data' in st.session_state and df is None:
-        df = st.session_state['demo_data']
+            X = coerce_and_align(df)
+            y = df["koi_disposition"] if "koi_disposition" in df.columns else np.nan
+            block = X.copy(); block["koi_disposition"] = y
+            st.session_state["data_store"] = pd.concat([st.session_state["data_store"], block], axis=0, ignore_index=True)
+            added += len(block)
+        st.success(f"Ingested {added} rows.")
+        if auto_train and st.session_state["data_store"]["koi_disposition"].notna().any():
+            st.info("Auto-training on labeled rows…")
+            # trigger user to go to Train tab if needed (no forced rerun)
 
-    if df is not None:
-        with st.expander("📋 Dataset Preview", expanded=True):
-            st.dataframe(df.head(10), use_container_width=True)
+# -------------------------
+# Explore
+# -------------------------
+with tab_explore:
+    st.markdown('<div class="cel-card pad-lg">', unsafe_allow_html=True)
+    st.subheader("🛰️ Explore Dataset")
+    data = st.session_state["data_store"]
+    if data.empty:
+        st.info("No data yet.")
+    else:
+        c1,c2,c3,c4 = st.columns(4)
+        with c1: st.metric("Rows", int(len(data)))
+        with c2: st.metric("Labeled", int(data["koi_disposition"].notna().sum()))
+        with c3: st.metric("Unlabeled", int(data["koi_disposition"].isna().sum()))
+        with c4: st.metric("Features", len(SELECTED_FEATURES))
 
-        c1, c2, c3 = st.columns([1,1,1])
-        with c2:
-            if st.button("🔬 Run Analysis", use_container_width=True, type="primary"):
-                with st.spinner("Analyzing candidates..."):
-                    progress_bar = st.progress(0)
-                    X = align_features_df(df)
-                    progress_bar.progress(30)
-                    preds = pipeline.predict(X)
-                    probas = pipeline.predict_proba(X)
-                    progress_bar.progress(70)
-                    labels = decode_labels(preds)
-                    results = df.copy()
-                    results['prediction'] = labels
-                    results['confidence'] = (probas.max(axis=1) * 100).round(2)
-                    # Assume class order matches encoder; take index for 'CONFIRMED'
-                    try:
-                        classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE","CANDIDATE","CONFIRMED"]))
-                        confirmed_idx = classes.index("CONFIRMED")
-                    except ValueError:
-                        confirmed_idx = -1
-                    if confirmed_idx >= 0:
-                        results['confirmed_prob'] = (probas[:, confirmed_idx] * 100).round(2)
-                    else:
-                        results['confirmed_prob'] = (probas.max(axis=1) * 100).round(2)
-                    progress_bar.progress(100)
-                    st.session_state['results'] = results
-                    st.success(f"✅ Analysis complete! Processed {len(results)} candidates")
-                    time.sleep(0.3)
+        with st.expander("Preview (first 200 rows)", expanded=(comfy_density=="Comfy")):
+            st.dataframe(data.head(200), use_container_width=True)
 
-    # Show results
-    if 'results' in st.session_state:
-        results = st.session_state['results']
-        st.markdown("### 📊 Analysis Summary")
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            confirmed = (results['prediction'] == 'CONFIRMED').sum()
-            st.metric("🌟 Confirmed", int(confirmed), delta=f"{confirmed/len(results)*100:.1f}%")
-        with c2:
-            cand = (results['prediction'] == 'CANDIDATE').sum()
-            st.metric("🔍 Candidates", int(cand), delta=f"{cand/len(results)*100:.1f}%")
-        with c3:
-            fp = (results['prediction'] == 'FALSE POSITIVE').sum()
-            st.metric("❌ False Positives", int(fp), delta=f"{fp/len(results)*100:.1f}%")
-        with c4:
-            avg_conf = float(results['confidence'].mean())
-            st.metric("💪 Avg Confidence", f"{avg_conf:.1f}%", delta="High" if avg_conf > 70 else "Moderate")
+        # Label distribution if labels exist
+        if data["koi_disposition"].notna().any():
+            vc = data["koi_disposition"].dropna().value_counts()
+            fig = px.bar(vc, title="Label Distribution (Ingested)",
+                         labels={"value":"Count","index":"Label"},
+                         color=vc.values, color_continuous_scale=["#86e1ff","#a78bfa"])
+            fig.update_layout(template="plotly_dark", height=420, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("### 🔍 Detailed Results")
-        f1, f2, f3 = st.columns(3)
-        with f1:
-            filt = st.selectbox("Filter by prediction:", ["All","CONFIRMED","CANDIDATE","FALSE POSITIVE"])
-        with f2:
-            min_conf = st.slider("Min confidence:", 0, 100, 0)
-        with f3:
-            sort_by = st.selectbox("Sort by:", ["confidence","confirmed_prob","koi_score","koi_model_snr","koi_period"])
-        view = results.copy()
-        if filt != "All":
-            view = view[view['prediction'] == filt]
-        view = view[view['confidence'] >= min_conf]
-        if sort_by in view.columns:
-            view = view.sort_values(sort_by, ascending=False)
-        st.dataframe(view, use_container_width=True)
+        feat = st.selectbox("Inspect feature", SELECTED_FEATURES, index=0)
+        fig = px.histogram(data, x=feat, nbins=40, title=f"Distribution: {feat}",
+                           color_discrete_sequence=["#86e1ff"])
+        fig.update_layout(template="plotly_dark", height=420)
+        st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        csv = view.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Results (CSV)",
-            data=csv,
-            file_name=f"exoplanet_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
+# -------------------------
+# Train & Tune
+# -------------------------
+with tab_train:
+    st.markdown('<div class="cel-card pad-lg">', unsafe_allow_html=True)
+    st.subheader("🧬 Train & Hyperparameter Tuning")
+    data = st.session_state["data_store"]
+    labeled = data.dropna(subset=["koi_disposition"])
+    if labeled.empty:
+        st.info("No labeled data available yet.")
+    else:
+        le = ensure_label_encoder(st.session_state["label_encoder"], labeled["koi_disposition"])
+        y = le.transform(labeled["koi_disposition"].astype(str))
+        X = coerce_and_align(labeled)
+
+        # Hyperparameters
+        st.markdown("##### Hyperparameters")
+        cc1, cc2, cc3 = st.columns(3)
+        with cc1:
+            learning_rate = st.slider("learning_rate", 0.01, 0.5, 0.05, 0.01)
+            max_iter = st.slider("max_iter", 50, 1000, 500, 50)
+            max_depth = st.slider("max_depth", 2, 16, 6, 1)
+        with cc2:
+            min_samples_leaf = st.slider("min_samples_leaf", 5, 200, 20, 5)
+            l2_regularization = st.slider("l2_regularization", 0.0, 5.0, 1.0, 0.1)
+            early_stopping = st.checkbox("early_stopping", value=True)
+        with cc3:
+            validation_fraction = st.slider("validation_fraction", 0.05, 0.3, 0.1, 0.01)
+            n_iter_no_change = st.slider("n_iter_no_change", 5, 50, 20, 1)
+            use_cw = st.checkbox("Use class_weight", value=True)
+
+        class_weight = None
+        if use_cw:
+            classes_list = list(le.classes_)
+            cw1, cw2, cw3 = st.columns(3)
+            with cw1:
+                w_conf = st.number_input("Weight CONFIRMED", 1.0, 20.0, 5.0, 0.5)
+            with cw2:
+                w_cand = st.number_input("Weight CANDIDATE", 1.0, 20.0, 5.0, 0.5)
+            with cw3:
+                w_fp   = st.number_input("Weight FALSE POSITIVE", 0.5, 20.0, 1.0, 0.5)
+            # Map class index -> weight robustly
+            idx_map = {name: int(np.where(np.array(classes_list)==name)[0][0]) for name in classes_list}
+            class_weight = {
+                idx_map.get("CONFIRMED",1): w_conf,
+                idx_map.get("CANDIDATE",0): w_cand,
+                idx_map.get("FALSE POSITIVE",2): w_fp,
+            }
+
+        params = dict(
+            learning_rate=learning_rate,
+            max_iter=int(max_iter),
+            max_depth=int(max_depth),
+            min_samples_leaf=int(min_samples_leaf),
+            l2_regularization=float(l2_regularization),
+            early_stopping=early_stopping,
+            validation_fraction=float(validation_fraction),
+            n_iter_no_change=int(n_iter_no_change),
+            class_weight=class_weight
         )
 
-# -------------------------
-# Tab 2: Quick Classify
-# -------------------------
-with tab2:
-    st.markdown("""
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);
-                    border-radius:15px;margin-bottom:30px;'>
-            <h3 style='margin:0;'>✨ Quick Candidate Classification</h3>
-            <p style='color:#a0a0ff;margin-top:10px;'>Enter the 10 trained features.</p>
-        </div>
-    """, unsafe_allow_html=True)
+        cta1, cta2 = st.columns(2)
+        with cta1:
+            train_btn = st.button("🚀 Train / Retrain", use_container_width=True)
+        with cta2:
+            cv_btn = st.button("🧪 5-Fold CV (macro F1)", use_container_width=True)
 
-    # Inputs in logical groups
-    st.markdown("#### 📡 Signal & Score")
+        if train_btn:
+            with st.spinner("Training model…"):
+                pipe = build_pipeline(params)
+                Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+                pipe.fit(Xtr, ytr)
+                proba = pipe.predict_proba(Xte)
+                y_pred = pipe.predict(Xte)
+                report, cm, auc_ovr, brier_macro = compute_metrics(yte, y_pred, proba, le.classes_)
+                st.session_state["pipeline"] = pipe
+                st.session_state["label_encoder"] = le
+                st.session_state["metrics"] = dict(
+                    report=report, cm=cm.tolist(), auc_ovr=auc_ovr, brier=brier_macro,
+                    params=params, timestamp=datetime.now().isoformat()
+                )
+                st.session_state["last_train_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                st.success("Model trained.")
+
+        if cv_btn:
+            with st.spinner("Running Stratified 5-Fold…"):
+                pipe = build_pipeline(params)
+                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+                try:
+                    from sklearn.metrics import make_scorer, f1_score
+                    scores = cross_val_score(pipe, X, y, scoring=make_scorer(f1_score, average="macro"), cv=skf)
+                except Exception:
+                    scores = cross_val_score(pipe, X, y, scoring="accuracy", cv=skf)
+                st.info(f"CV macro F1 (mean ± std): **{np.mean(scores):.3f} ± {np.std(scores):.3f}**")
+
+        # Current model summary
+        if st.session_state["pipeline"] is not None and st.session_state["metrics"]:
+            m = st.session_state["metrics"]
+            d1,d2,d3,d4 = st.columns(4)
+            with d1: st.metric("ROC-AUC (OvR, macro)", f"{m['auc_ovr']:.3f}" if m['auc_ovr']==m['auc_ovr'] else "n/a")
+            with d2: st.metric("Brier (macro)", f"{m['brier']:.3f}")
+            with d3: st.metric("Params tuned", str(len(m["params"])))
+            with d4: st.metric("Trained", st.session_state["last_train_time"] or "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# -------------------------
+# Classify
+# -------------------------
+with tab_classify:
+    st.markdown('<div class="cel-card pad-lg">', unsafe_allow_html=True)
+    st.subheader("🧪 Classify Candidates")
+    t1, t2, t3 = st.columns(3)
+    th_fp = t1.slider("Decision Threshold — FALSE POSITIVE", 0.0, 0.99, 0.50, 0.01)
+    th_cand = t2.slider("Decision Threshold — CANDIDATE", 0.0, 0.99, 0.50, 0.01)
+    th_conf = t3.slider("Decision Threshold — CONFIRMED", 0.0, 0.99, 0.50, 0.01)
+    thresholds = {"FALSE POSITIVE": th_fp, "CANDIDATE": th_cand, "CONFIRMED": th_conf}
+
     q1, q2, q3 = st.columns(3)
     with q1:
-        koi_score = st.number_input("koi_score", min_value=0.0, step=0.01, value=0.5)
+        koi_score = st.number_input("koi_score", 0.0, 1.0, 0.5, 0.01)
+        koi_model_snr = st.number_input("koi_model_snr", 0.0, 1e6, 20.0, 0.1)
+        koi_impact = st.number_input("koi_impact", 0.0, 3.0, 0.5, 0.01)
     with q2:
-        koi_model_snr = st.number_input("koi_model_snr", min_value=0.0, step=0.1, value=20.0)
+        koi_duration = st.number_input("koi_duration (hours)", 0.0, 1e6, 10.0, 0.1)
+        koi_prad = st.number_input("koi_prad (Earth radii)", 0.0, 1e6, 1.5, 0.1)
+        koi_period = st.number_input("koi_period (days)", 0.0, 1e6, 30.0, 0.1)
     with q3:
-        koi_impact = st.number_input("koi_impact", min_value=0.0, max_value=1.5, step=0.01, value=0.5)
+        koi_fpflag_nt = st.selectbox("koi_fpflag_nt", [0,1], index=0)
+        koi_fpflag_co = st.selectbox("koi_fpflag_co", [0,1], index=0)
+        koi_fpflag_ss = st.selectbox("koi_fpflag_ss", [0,1], index=0)
+        koi_fpflag_ec = st.selectbox("koi_fpflag_ec", [0,1], index=0)
 
-    st.markdown("#### 🪐 Geometry & Timing")
-    r1, r2, r3 = st.columns(3)
-    with r1:
-        koi_duration = st.number_input("koi_duration (hours)", min_value=0.0, step=0.1, value=10.0)
-    with r2:
-        koi_prad = st.number_input("koi_prad (Earth radii)", min_value=0.0, step=0.1, value=1.5)
-    with r3:
-        koi_period = st.number_input("koi_period (days)", min_value=0.0, step=0.1, value=30.0)
-
-    st.markdown("#### 🚩 False-Positive Flags (0/1)")
-    f1, f2, f3, f4 = st.columns(4)
-    with f1:
-        koi_fpflag_nt = st.selectbox("koi_fpflag_nt", [0,1], index=0, help="Not transit-like flag")
-    with f2:
-        koi_fpflag_co = st.selectbox("koi_fpflag_co", [0,1], index=0, help="Centroid offset")
-    with f3:
-        koi_fpflag_ss = st.selectbox("koi_fpflag_ss", [0,1], index=0, help="Significant secondary")
-    with f4:
-        koi_fpflag_ec = st.selectbox("koi_fpflag_ec", [0,1], index=0, help="Eclipsing binary")
-
-    c1, c2, c3 = st.columns([1,2,1])
-    with c2:
-        if st.button("🔮 Classify Candidate", use_container_width=True, type="primary"):
-            with st.spinner("Analyzing candidate..."):
-                row = pd.DataFrame([{
-                    "koi_score": koi_score,
-                    "koi_fpflag_nt": koi_fpflag_nt,
-                    "koi_model_snr": koi_model_snr,
-                    "koi_fpflag_co": koi_fpflag_co,
-                    "koi_fpflag_ss": koi_fpflag_ss,
-                    "koi_fpflag_ec": koi_fpflag_ec,
-                    "koi_impact": koi_impact,
-                    "koi_duration": koi_duration,
-                    "koi_prad": koi_prad,
-                    "koi_period": koi_period,
-                }])
-                X = align_features_df(row)
-                pred = pipeline.predict(X)[0]
-                proba = pipeline.predict_proba(X)[0]
-                label = decode_labels(np.array([pred]))[0]
-                confidence = float(proba.max() * 100)
-
-                time.sleep(0.3)
-
-                if label == "CONFIRMED":
-                    st.balloons()
-                    color_block = ("rgba(0,255,0,0.1)", "rgba(0,255,255,0.5)")
-                    title = "🌟 EXOPLANET CONFIRMED!"
-                    sub = "This candidate shows strong signs of being a real exoplanet."
-                elif label == "CANDIDATE":
-                    color_block = ("rgba(255,255,0,0.1)", "rgba(255,255,0,0.5)")
-                    title = "🔍 CANDIDATE"
-                    sub = "Further observation needed to confirm."
-                else:
-                    color_block = ("rgba(255,0,0,0.1)", "rgba(255,0,0,0.5)")
-                    title = "❌ FALSE POSITIVE"
-                    sub = "This signal is likely not from a real exoplanet."
-
-                st.markdown(f"""
-                    <div style='text-align:center;padding:30px;background:linear-gradient(135deg,{color_block[0]},{color_block[0]});
-                                border-radius:20px;border:2px solid {color_block[1]};'>
-                        <h1 style='margin:0;'>{title}</h1>
-                        <h2>Confidence: {confidence:.1f}%</h2>
-                        <p style='color:#cfe3ff;'>{sub}</p>
-                    </div>
-                """, unsafe_allow_html=True)
-
-                st.markdown("### 📊 Probability Distribution")
-                classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE","CANDIDATE","CONFIRMED"]))
-                fig = go.Figure(data=[go.Bar(
-                    x=classes,
-                    y=(proba * 100).round(2),
-                    text=[f"{p*100:.1f}%" for p in proba],
-                    textposition='auto'
-                )])
-                fig.update_layout(
-                    title="Classification Probabilities",
-                    xaxis_title="Class",
-                    yaxis_title="Probability (%)",
-                    template="plotly_dark",
-                    height=400,
-                    showlegend=False
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-# -------------------------
-# Tab 3: Model Training (simple, optional)
-# -------------------------
-with tab3:
-    st.markdown("""
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);
-                    border-radius:15px;margin-bottom:30px;'>
-            <h3 style='margin:0;'>🧬 Train Custom Model (with 10 features)</h3>
-            <p style='color:#a0a0ff;margin-top:10px;'>
-                Upload a CSV containing the 10 feature columns and a 'koi_disposition' column.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    train_file = st.file_uploader("Upload Training Dataset (CSV)", type=['csv'], key='training_file')
-    if train_file is not None:
-        try:
-            train_df = pd.read_csv(train_file, comment="#")
-            train_df.columns = train_df.columns.str.strip()
-            st.success(f"✅ Loaded {len(train_df)} training samples")
-            with st.expander("📋 Training Data Preview"):
-                st.dataframe(train_df.head(), use_container_width=True)
-
-            # Quick train controls
-            colA, colB = st.columns(2)
-            with colA:
-                test_size = st.slider("Test size", 0.1, 0.4, 0.2, step=0.05)
-            with colB:
-                max_iter = st.number_input("Max Iterations", 50, 1000, 500, step=50)
-
-            if st.button("🚀 Start Training", type="primary"):
-                with st.spinner("Training model..."):
-                    # Prepare data
-                    # ensure disposition column exists
-                    if "koi_disposition" not in train_df.columns:
-                        st.error("Training CSV must include 'koi_disposition'.")
-                    else:
-                        # encode labels
-                        train_le = LabelEncoder()
-                        y = train_le.fit_transform(train_df["koi_disposition"].astype(str))
-                        X = align_features_df(train_df)  # will pick/clean the 10 features
-
-                        # Build a simple pipeline mirroring your preprocessing
-                        numeric_transformer = Pipeline(steps=[
-                            ("imputer", SimpleImputer(strategy="constant", fill_value=0)),
-                            ("scaler", StandardScaler()),
-                        ])
-                        preprocessor = ColumnTransformer(
-                            transformers=[("num", numeric_transformer, SELECTED_FEATURES)]
-                        )
-                        clf = HistGradientBoostingClassifier(
-                            learning_rate=0.05,
-                            max_iter=int(max_iter),
-                            max_depth=6,
-                            min_samples_leaf=20,
-                            l2_regularization=1.0,
-                            early_stopping=True,
-                            validation_fraction=0.1,
-                            n_iter_no_change=20,
-                            random_state=42,
-                        )
-                        new_pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", clf)])
-                        # Simple split (no report here to keep things snappy)
-                        from sklearn.model_selection import train_test_split
-                        Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=42, stratify=y)
-                        new_pipeline.fit(Xtr, ytr)
-                        acc = new_pipeline.score(Xte, yte)
-                        # Save
-                        joblib.dump(new_pipeline, "kepler_gb_pipeline_weighted.joblib")
-                        joblib.dump(train_le, "kepler_label_encoder.joblib")
-                        st.success(f"✅ Training complete. Test accuracy: {acc:.2%}")
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            with open("kepler_gb_pipeline_weighted.joblib", "rb") as f:
-                                st.download_button("📥 Download Pipeline", f.read(), "kepler_gb_pipeline_weighted.joblib")
-                        with c2:
-                            with open("kepler_label_encoder.joblib", "rb") as f:
-                                st.download_button("📥 Download Encoder", f.read(), "kepler_label_encoder.joblib")
-        except Exception as e:
-            st.error(f"Error during training: {e}")
-    else:
-        st.info("Upload training data to (re)train a compatible 10-feature model.")
-
-# -------------------------
-# Tab 4: Visualizations
-# -------------------------
-with tab4:
-    st.markdown("""
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);
-                    border-radius:15px;margin-bottom:30px;'>
-            <h3 style='margin:0;'>📈 Data Visualizations</h3>
-            <p style='color:#a0a0ff;margin-top:10px;'>Explore patterns in your analyzed results.</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    if 'results' in st.session_state:
-        results = st.session_state['results']
-        viz_type = st.selectbox("Select Visualization", ["Distribution Overview","Feature Correlations","Habitable Zone-ish","3D Explorer"])
-
-        if viz_type == "Distribution Overview":
-            c1, c2 = st.columns(2)
-            with c1:
-                vc = results['prediction'].value_counts()
-                fig = px.pie(values=vc.values, names=vc.index, title="Classification Distribution")
-                fig.update_traces(textposition='inside', textinfo='percent+label')
-                fig.update_layout(template="plotly_dark", height=400)
-                st.plotly_chart(fig, use_container_width=True)
-            with c2:
-                fig = px.histogram(results, x='confidence', nbins=20, title="Confidence Distribution")
-                fig.update_layout(template="plotly_dark", height=400)
-                st.plotly_chart(fig, use_container_width=True)
-
-        elif viz_type == "Feature Correlations":
-            numeric_cols = [c for c in SELECTED_FEATURES if c in results.columns]
-            if len(numeric_cols) >= 3:
-                feats = numeric_cols[:4]
-                fig = px.scatter_matrix(results, dimensions=feats, color='prediction', title="Feature Correlation Matrix")
-                fig.update_layout(template="plotly_dark", height=800)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Not enough numeric features available.")
-
-        elif viz_type == "Habitable Zone-ish":
-            # Not true HZ, but radius vs period proxy with confidence scaling
-            if all(col in results.columns for col in ["koi_prad","koi_period"]):
-                fig = px.scatter(
-                    results, x="koi_period", y="koi_prad", color="prediction", size="confidence",
-                    title="Radius vs Period (confidence-scaled)"
-                )
-                fig.update_layout(template="plotly_dark", height=600)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Required features missing: koi_period & koi_prad")
-
-        elif viz_type == "3D Explorer":
-            have = [c for c in ["koi_model_snr","koi_prad","koi_period"] if c in results.columns]
-            if len(have) == 3:
-                fig = px.scatter_3d(results, x=have[0], y=have[1], z=have[2],
-                                    color="prediction", size="confidence",
-                                    title="3D Explorer: SNR vs Radius vs Period")
-                fig.update_layout(template="plotly_dark", height=700)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Need koi_model_snr, koi_prad, koi_period for 3D view.")
-    else:
-        st.info("📊 Run an analysis on Tab 1 to see visualizations.")
-        if st.button("🎲 Generate Demo Visualization Data", use_container_width=True):
-            demo = generate_demo_data(60)
-            # simulate model pass
-            X = align_features_df(demo)
-            preds = pipeline.predict(X)
-            probas = pipeline.predict_proba(X)
-            labels = decode_labels(preds)
-            results = demo.copy()
-            results["prediction"] = labels
-            results["confidence"] = (probas.max(axis=1) * 100).round(2)
-            try:
-                classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE","CANDIDATE","CONFIRMED"]))
-                ci = classes.index("CONFIRMED")
-            except ValueError:
-                ci = -1
-            results["confirmed_prob"] = (probas[:, ci] * 100).round(2) if ci >= 0 else (probas.max(axis=1) * 100).round(2)
-            st.session_state["results"] = results
-            st.success("✅ Demo data generated — open visualizations again.")
-
-# -------------------------
-# Tab 5: About
-# -------------------------
-with tab5:
-    st.markdown("""
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);
-                    border-radius:15px;margin-bottom:30px;'>
-            <h3 style='margin:0;'>ℹ️ About ExoHunter AI</h3>
-            <p style='color:#a0a0ff;margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler 10-feature model edition</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns([2,1])
-    with col1:
-        st.markdown("""
-            ### 🌌 Project Overview
-            This build integrates your trained Kepler pipeline that uses exactly 10 features:
-            `koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period`.
-            It supports batch analysis, single-candidate classification, light retraining, and interactive visuals.
-        """)
-    with col2:
-        st.markdown("""
-            ### 🏆 Highlights
-            - Exact feature alignment to your model  
-            - Robust fallbacks if artifacts are missing  
-            - Clean UI with metrics & downloads  
-            - Plotly visuals and 3D explorer
-        """)
+    if st.button("🔮 Classify Single", use_container_width=True):
+        df_row = pd.DataFrame([{
+            "koi_score": koi_score,
+            "koi_fpflag_nt": koi_fpflag_nt,
+            "koi_model_snr": koi_model_snr,
+            "koi_fpflag_co": koi_fpflag_co,
+            "koi_fpflag_ss": koi_fpflag_ss,
+            "koi_fpflag_ec": koi_fpflag_ec,
+            "koi_impact": koi_impact,
+            "koi_duration": koi_duration,
+            "koi_prad": koi_prad,
+            "koi_period": koi_period,
+        }])
+        X = coerce_and_align(df_row)
+        pipe = st.session_state["pipeline"]; le = st.session_state["label_encoder"]
+        if pipe is None or le is None:
+            st.error("No trained/loaded model yet.")
+        else:
+            proba = pipe.predict_proba(X)[0]
+            classes_ = list(le.classes_)
+            # Thresholding: choose highest class that exceeds its threshold; else argmax
+            argmax_idx = int(np.argmax(proba)) if len(proba.shape)>0 else 0
+            picked = classes_[argmax_idx]
+            for idx, name in enumerate(classes_):
+                if proba[idx] >= thresholds.get(name, 0.5):
+                    picked = name
+            conf = float(np.max(proba) * 100)
+            st.markdown(f"### Prediction: **{picked}** • confidence: **{conf:.1f}%**")
+            fig = go.Figure(data=[go.Bar(
+                x=classes_, y=(proba*100).round(2),
+                marker=dict(line=dict(width=0.5, color="rgba(255,255,255,.35)"))
+            )])
+            fig.update_layout(template="plotly_dark", height=360, title="Probability Distribution",
+                              xaxis_title="Class", yaxis_title="Probability (%)",
+                              colorway=["#86e1ff","#a78bfa","#34d399"])
+            st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
-    st.markdown("""
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);border-radius:15px;'>
-            <h4 style='color:#00ffff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
-            <p style='color:#a0a0ff;'>Exploring new worlds through AI</p>
-        </div>
-    """, unsafe_allow_html=True)
+    up_batch = st.file_uploader("Upload CSV to classify (no label required)", type=["csv"], key="cls_csv")
+    if up_batch is not None:
+        df = pd.read_csv(up_batch, comment="#")
+        X = coerce_and_align(df)
+        pipe = st.session_state["pipeline"]; le = st.session_state["label_encoder"]
+        if pipe is None or le is None:
+            st.error("No trained/loaded model.")
+        else:
+            P = pipe.predict_proba(X)
+            classes_ = list(le.classes_)
+            labels = [classes_[int(np.argmax(P[i]))] for i in range(len(X))]
+            for i in range(len(X)):
+                for j, name in enumerate(classes_):
+                    if P[i, j] >= thresholds.get(name, 0.5):
+                        labels[i] = name
+            out = df.copy(); out["prediction"] = labels
+            for j, name in enumerate(classes_):
+                out[f"proba_{name}"] = np.round(P[:, j], 6)
+            st.success(f"Classified {len(out)} rows.")
+            st.dataframe(out.head(200), use_container_width=True)
+            buf = io.StringIO(); out.to_csv(buf, index=False)
+            st.download_button("📥 Download Predictions CSV", buf.getvalue(),
+                               file_name=f"celestia_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                               mime="text/csv")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
-# Debug info
-# =========================
-if 'debug_mode' in locals() and debug_mode:
-    with st.sidebar.expander("🔍 Debug Information", expanded=False):
-        st.write("**Session State Keys:**", list(st.session_state.keys()))
-        st.write("**Pipeline Type:**", type(pipeline).__name__)
-        if hasattr(pipeline, 'classes_'):
-            st.write("**Model Classes:**", getattr(pipeline, 'classes_', None))
-        if label_encoder and hasattr(label_encoder, 'classes_'):
-            st.write("**Encoder Classes:**", label_encoder.classes_)
+# -------------------------
+# Metrics & Explain
+# -------------------------
+with tab_metrics:
+    st.markdown('<div class="cel-card pad-lg">', unsafe_allow_html=True)
+    st.subheader("📊 Metrics & Explainability")
+    if st.session_state["pipeline"] is None or st.session_state["label_encoder"] is None or not st.session_state["metrics"]:
+        st.info("Train a model in **Train & Tune** to populate metrics.")
+    else:
+        m = st.session_state["metrics"]; le = st.session_state["label_encoder"]
+        classes_ = list(le.classes_)
+        c1,c2,c3,c4 = st.columns(4)
+        with c1: st.metric("ROC-AUC (OvR)", f"{m['auc_ovr']:.3f}" if m['auc_ovr']==m['auc_ovr'] else "n/a")
+        with c2: st.metric("Brier", f"{m['brier']:.3f}")
+        with c3: st.metric("Params", str(len(m["params"])))
+        with c4: st.metric("Trained", m.get("timestamp","—").split("T")[0])
 
-# =========================
-# Footer
-# =========================
-st.markdown("""
-    <div style='text-align:center;margin-top:50px;padding:20px;border-top:1px solid rgba(255,255,255,0.1);'>
-        <p style='color:#6666ff;font-size:0.9rem;'>
-            ExoHunter AI • NASA Space Apps 2025 •
-            <span style='color:#00ffff;'>Kepler 10-Feature Pipeline</span>
-        </p>
-    </div>
-""", unsafe_allow_html=True)
+        # Confusion matrix
+        fig_cm = plot_confusion_matrix(np.array(m["cm"]), classes_)
+        st.plotly_chart(fig_cm, use_container_width=True)
+
+        # Classification report table
+        rep = pd.DataFrame(m["report"]).T
+        rep = rep.loc[[c for c in classes_] + ["macro avg","weighted avg"], ["precision","recall","f1-score","support"]]
+        st.markdown("#### Classification Report")
+        st.dataframe(np.round(rep, 3), use_container_width=True)
+
+        # Recompose split for calibration/importance
+        data = st.session_state["data_store"].dropna(subset=["koi_disposition"])
+        X = coerce_and_align(data)
+        y = le.transform(data["koi_disposition"].astype(str))
+        Xtr,Xte,ytr,yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        pipe = st.session_state["pipeline"]; proba = pipe.predict_proba(Xte)
+
+        st.markdown("#### Calibration")
+        st.plotly_chart(plot_calibration(proba, yte, classes_), use_container_width=True)
+
+        st.markdown("#### Feature Importances")
+        fi_fig = plot_feature_importance(pipe)
+        if fi_fig is not None:
+            st.plotly_chart(fi_fig, use_container_width=True)
+        else:
+            st.info("Estimator does not expose feature importances on this version.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# -------------------------
+# Export
+# -------------------------
+with tab_export:
+    st.markdown('<div class="cel-card pad-lg">', unsafe_allow_html=True)
+    st.subheader("📦 Export Artifacts & Report")
+    pipe = st.session_state["pipeline"]; le = st.session_state["label_encoder"]
+    if pipe is None or le is None:
+        st.info("Train or load a model first.")
+    else:
+        save_artifacts(pipe, le)
+        st.success("Saved `celestia_pipeline.joblib` & `celestia_label_encoder.joblib`.")
+        with open("celestia_pipeline.joblib","rb") as f:
+            st.download_button("📥 Download Pipeline", f.read(), "celestia_pipeline.joblib")
+        with open("celestia_label_encoder.joblib","rb") as f:
+            st.download_button("📥 Download Label Encoder", f.read(), "celestia_label_encoder.joblib")
+        if st.session_state["metrics"]:
+            m = st.session_state["metrics"].copy()
+            m["classes_"] = list(le.classes_); m["feature_set"] = SELECTED_FEATURES
+            card = json.dumps(m, indent=2)
+            st.download_button("📄 Download Evaluation Report (JSON)", card, "celestia_model_report.json", "application/json")
+    st.markdown('</div>', unsafe_allow_html=True)
