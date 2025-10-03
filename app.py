@@ -3,6 +3,7 @@
 # Integrates trained pipeline: gb_pipeline.joblib + label_encoder.joblib
 # Batch: analyzes 10 random rows from uploaded CSV
 # Quick Classify: human-friendly names, no default values; pipeline handles standardization/encoding
+# Visualizations: all plots shown together (pie, histogram, correlation matrix, radius vs period, 3D explorer)
 
 import streamlit as st
 import pandas as pd
@@ -39,9 +40,10 @@ def inject_custom_css():
 
             /* Main app background */
             .stApp {
-                background: linear-gradient(-45deg, #0a0118, #1a0033, #0f0c29, #24243e);
+                background: radial-gradient(1200px 800px at 50% -200px, rgba(60,0,120,0.35), transparent 60%),
+                            linear-gradient(135deg, #0a0118, #1a0033 35%, #0f0c29 65%, #24243e);
                 background-size: 400% 400%;
-                animation: gradientShift 15s ease infinite;
+                animation: gradientShift 18s ease infinite;
                 overflow-x: hidden;
             }
             @keyframes gradientShift {
@@ -51,211 +53,200 @@ def inject_custom_css():
             }
 
             /* Parallax star fields */
-            .stars{
-                position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none;
-                background-image:
-                    radial-gradient(2px 2px at 20px 30px, white, transparent),
-                    radial-gradient(2px 2px at 40px 70px, white, transparent),
-                    radial-gradient(1px 1px at 50px 50px, white, transparent),
-                    radial-gradient(1px 1px at 80px 10px, white, transparent),
-                    radial-gradient(2px 2px at 130px 80px, white, transparent);
-                background-repeat: repeat; background-size:200px 200px;
-                animation: stars 60s linear infinite; opacity:0.15; z-index:0;
+            .stars, .stars2, .stars3{
+                position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;
             }
-            @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
+            .stars{
+                background-image:
+                    radial-gradient(2px 2px at 20px 30px, #ffffff, transparent),
+                    radial-gradient(2px 2px at 40px 70px, #a6d3ff, transparent),
+                    radial-gradient(1px 1px at 50px 50px, #ffffff, transparent),
+                    radial-gradient(1px 1px at 80px 10px, #cfe8ff, transparent);
+                background-repeat: repeat; background-size:200px 200px;
+                animation: stars 90s linear infinite; opacity:0.18;
+            }
+            @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-160px);} }
 
             .stars2{
-                position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none;
                 background-image:
                     radial-gradient(1px 1px at 60px 120px, #bbddff, transparent),
                     radial-gradient(2px 2px at 150px 90px, #ffffff, transparent),
                     radial-gradient(1px 1px at 200px 40px, #aaccff, transparent),
                     radial-gradient(2px 2px at 300px 160px, #ffffff, transparent);
-                background-repeat: repeat; background-size:300px 300px;
-                animation: stars2 120s linear infinite; opacity:0.12; z-index:0;
+                background-repeat: repeat; background-size:320px 320px;
+                animation: stars2 150s linear infinite; opacity:0.12;
             }
-            @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
+            @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
 
             .stars3{
-                position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none;
                 background-image:
                     radial-gradient(1px 1px at 120px 60px, #88c0ff, transparent),
                     radial-gradient(2px 2px at 240px 180px, #ffffff, transparent),
                     radial-gradient(1px 1px at 400px 120px, #cfe8ff, transparent);
-                background-repeat: repeat; background-size:500px 500px;
-                animation: stars3 240s linear infinite; opacity:0.08; z-index:0;
+                background-repeat: repeat; background-size:520px 520px;
+                animation: stars3 240s linear infinite; opacity:0.08;
             }
-            @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
+            @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-260px);} }
 
             /* Nebula glow blobs */
             .nebula {
-                position: fixed; width: 600px; height: 600px; pointer-events: none; z-index: 0; opacity: 0.15; filter: blur(100px);
+                position: fixed; width: 700px; height: 700px; pointer-events: none; z-index:0; opacity: 0.18; filter: blur(110px);
             }
-            .nebula-1 { top: -200px; left: -200px; background: radial-gradient(circle, rgba(138, 43, 226, 0.4) 0%, transparent 70%); animation: nebulaPulse 20s infinite ease-in-out; }
-            .nebula-2 { bottom: -200px; right: -200px; background: radial-gradient(circle, rgba(0, 191, 255, 0.4) 0%, transparent 70%); animation: nebulaPulse 25s infinite ease-in-out; animation-delay: 5s; }
-            @keyframes nebulaPulse { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.2) rotate(180deg); } }
+            .nebula-1 { top: -250px; left: -260px; background: radial-gradient(circle, rgba(150, 50, 255, 0.45) 0%, transparent 70%); animation: nebulaPulse 22s infinite ease-in-out; }
+            .nebula-2 { bottom: -250px; right: -260px; background: radial-gradient(circle, rgba(0, 200, 255, 0.45) 0%, transparent 70%); animation: nebulaPulse 27s infinite ease-in-out 4s; }
+            @keyframes nebulaPulse { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.25) rotate(160deg); } }
 
-            /* Planets (ambient) */
+            /* Ambient planets */
             .planet {
-                position:fixed; border-radius:50%; pointer-events:none; z-index:0; filter: drop-shadow(0 0 20px rgba(0,200,255,0.3)); opacity:0.3;
+                position:fixed; border-radius:50%; pointer-events:none; z-index:0; filter: drop-shadow(0 0 26px rgba(0,200,255,0.35)); opacity:0.35;
             }
             .planet-1 {
-                width:160px; height:160px; bottom:5%; left:6%;
-                background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%);
+                width:180px; height:180px; bottom:6%; left:6%;
+                background: radial-gradient(circle at 35% 35%, #86d9ff, #2b6cb0 60%, #1a365d 100%);
                 animation: floatPlanet1 28s ease-in-out infinite;
             }
-            @keyframes floatPlanet1 { 0%,100% { transform: translateY(0) translateX(0); } 25% { transform: translateY(-10px) translateX(5px);} 50% { transform: translateY(-6px) translateX(-5px);} 75% { transform: translateY(-8px) translateX(3px);} }
+            @keyframes floatPlanet1 { 0%,100% { transform: translateY(0) translateX(0);} 25% { transform: translateY(-12px) translateX(7px);} 50% { transform: translateY(-6px) translateX(-6px);} 75% { transform: translateY(-10px) translateX(4px);} }
 
             .planet-2 {
-                width:110px; height:110px; top:8%; right:10%;
+                width:130px; height:130px; top:8%; right:8%;
                 background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%);
                 animation: floatPlanet2 32s ease-in-out infinite;
             }
             @keyframes floatPlanet2 { 0%,100% { transform: translateY(0) scale(1);} 50% { transform: translateY(10px) scale(1.05);} }
 
             /* ===== Orbiting planets around title ===== */
+            .title-zone {
+                position: relative;
+                z-index: 5; /* Above parallax layers */
+                margin-top: 10px;
+            }
             .title-orbit {
                 position: relative;
                 width: 100%;
                 display: flex;
                 justify-content: center;
-                margin-bottom: 1rem;
+                align-items: center;
+                margin-bottom: 0.25rem;
             }
             .orbit-wrapper {
                 position: absolute;
-                width: 320px; height: 320px;
-                margin-top: -40px; /* raise orbit around title */
+                width: 360px; height: 360px;
                 pointer-events: none;
+                z-index: 6;
             }
             .orbit-ring {
                 position: absolute;
                 inset: 0;
                 border-radius: 50%;
-                border: 1px dashed rgba(0, 255, 255, 0.25);
-                animation: orbitRotate 28s linear infinite;
+                border: 1.5px dashed rgba(120, 200, 255, 0.28);
+                animation: orbitRotate 26s linear infinite;
             }
             .orbit-planet {
                 position: absolute;
-                width: 18px; height: 18px; border-radius: 50%;
-                top: -9px; left: 50%; transform: translateX(-50%);
-                box-shadow: 0 0 10px rgba(0,255,255,0.8);
+                width: 20px; height: 20px; border-radius: 50%;
+                top: -10px; left: 50%; transform: translateX(-50%);
+                box-shadow: 0 0 12px rgba(0,255,255,0.85);
             }
-            .p1 { background: radial-gradient(circle, #00ffff, #0088ff); }
-            .p2 { background: radial-gradient(circle, #ff99ff, #aa44cc); }
-            .p3 { background: radial-gradient(circle, #a6ff00, #33cc66); }
-            .ring-2 { transform: rotate(60deg); animation-duration: 34s; }
-            .ring-3 { transform: rotate(120deg); animation-duration: 40s; }
-            @keyframes orbitRotate {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
+            .p1 { background: radial-gradient(circle, #00f5ff, #0088ff); }
+            .p2 { background: radial-gradient(circle, #ff99ff, #b34cff); }
+            .p3 { background: radial-gradient(circle, #adff2f, #19c37d); }
+            .ring-2 { transform: rotate(70deg); animation-duration: 32s; }
+            .ring-3 { transform: rotate(140deg); animation-duration: 38s; }
+            @keyframes orbitRotate { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
 
             /* Reveal animation */
             .reveal-element { opacity: 0; transform: translateY(30px); transition: opacity 0.8s ease, transform 0.8s ease; }
             .reveal-element.revealed { opacity: 1; transform: translateY(0); }
 
-            /* Title */
+            /* Title (big, centered, blue/purple gradient like the old style) */
             h1 {
                 font-family:'Orbitron', monospace !important; font-weight:900 !important;
-                background: linear-gradient(120deg, #00ffff, #ff00ff, #00ffff);
-                background-size:200% auto; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-                animation: shine 3s linear infinite; text-align:center; font-size:3.6rem !important; margin-bottom:0.8rem !important;
-                text-shadow:0 0 40px rgba(0,255,255,0.6);
+                background: linear-gradient(120deg, #69b6ff, #d57bff, #69b6ff);
+                background-size:220% auto; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+                animation: shine 3s linear infinite; text-align:center; font-size:4rem !important; margin-bottom:0.2rem !important;
+                text-shadow:0 0 46px rgba(115,185,255,0.65);
             }
             @keyframes shine { to { background-position: 200% center; } }
 
-            h2,h3, p, li, span, div, label {
-                color:#b8b8ff !important; /* ensure no white/black text; make it bluish-purple */
+            /* Subtitle & all text — force bluish/purple theme */
+            h2,h3, p, li, span, div, label, th, td, .markdown-text-container, .stMarkdown, .st-b, .st-c, .st-d {
+                color:#b8b8ff !important;
             }
 
             /* Tabs */
             .stTabs [data-baseweb="tab-list"] {
-                background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.1);
-                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+                background: rgba(255,255,255,0.06); backdrop-filter: blur(10px); border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.12);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.25);
             }
             .stTabs [data-baseweb="tab"] {
-                color:#a0a0ff !important; font-family:'Space Grotesk', sans-serif !important; font-weight:700; transition: all .3s ease;
+                color:#b6c8ff !important; font-family:'Space Grotesk', sans-serif !important; font-weight:800; letter-spacing: .2px; transition: all .3s ease;
             }
             .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color: #9ed0ff !important; }
             .stTabs [aria-selected="true"] {
-                background: linear-gradient(90deg, rgba(0,255,255,0.2), rgba(255,0,255,0.2));
-                border-radius:10px; box-shadow: 0 4px 20px rgba(0,255,255,0.3);
+                background: linear-gradient(90deg, rgba(0,255,255,0.18), rgba(255,0,255,0.18));
+                border-radius:12px; box-shadow: 0 4px 20px rgba(0,255,255,0.35);
             }
 
             /* Inputs */
             .stTextInput input, .stNumberInput input, .stSelectbox select, .stTextArea textarea {
-                background: rgba(255,255,255,0.05) !important; border: 2px solid rgba(0,255,255,0.3) !important;
-                color:#e0e0ff !important; border-radius:10px !important; backdrop-filter: blur(5px);
-                transition: all .3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+                background: rgba(255,255,255,0.06) !important; border: 2px solid rgba(0,200,255,0.35) !important;
+                color:#e0e0ff !important; border-radius:12px !important; backdrop-filter: blur(5px);
+                transition: all .3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.25);
             }
             .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
-                border-color:#00ffff !important; box-shadow:0 0 30px rgba(0,255,255,0.4), inset 0 2px 4px rgba(0,0,0,0.2) !important; transform: scale(1.01);
+                border-color:#7bd4ff !important; box-shadow:0 0 34px rgba(0,200,255,0.45), inset 0 2px 4px rgba(0,0,0,0.25) !important; transform: scale(1.01);
             }
 
             /* Buttons */
             .stButton > button {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color:white; border:none; padding:12px 35px; border-radius:30px; font-weight:800; font-family:'Space Grotesk', sans-serif;
+                background: linear-gradient(135deg, #6aa0ff 0%, #8a5bf2 100%);
+                color:white; border:none; padding:12px 36px; border-radius:32px; font-weight:900; font-family:'Space Grotesk', sans-serif;
                 transition: all .25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                box-shadow:0 6px 20px rgba(102,126,234,0.4);
+                box-shadow:0 8px 24px rgba(120,120,255,0.35);
                 position: relative; overflow: hidden;
             }
-            .stButton > button:hover { transform: translateY(-3px) scale(1.05); box-shadow:0 10px 35px rgba(102,126,234,0.6); }
+            .stButton > button:hover { transform: translateY(-3px) scale(1.05); box-shadow:0 12px 38px rgba(120,120,255,0.55); }
 
-            /* Alerts */
+            /* Alerts & Metrics */
             .stAlert {
-                background: rgba(255,255,255,0.05) !important; backdrop-filter: blur(10px);
-                border:2px solid rgba(255,255,255,0.2); border-radius:15px; animation: slideInBounce .8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                background: rgba(255,255,255,0.06) !important; backdrop-filter: blur(10px);
+                border:2px solid rgba(255,255,255,0.18); border-radius:16px; box-shadow: 0 12px 42px rgba(0,0,0,0.35);
             }
-            @keyframes slideInBounce {
-                0% { opacity:0; transform: translateY(-30px) scale(0.9); }
-                60% { transform: translateY(5px) scale(1.02); }
-                100% { opacity:1; transform: translateY(0) scale(1); }
-            }
-
-            /* Metrics */
             [data-testid="metric-container"] {
-                background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
-                border:2px solid rgba(255,255,255,0.1); padding:20px; border-radius:15px;
-                box-shadow:0 6px 25px rgba(0,0,0,0.3); transition: all 0.3s ease; position: relative; overflow: hidden;
+                background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+                border:2px solid rgba(255,255,255,0.14); padding:20px; border-radius:16px;
+                box-shadow:0 8px 28px rgba(0,0,0,0.32);
             }
-            [data-testid="metric-container"]:hover { transform: translateY(-5px) scale(1.02); border-color: rgba(0,255,255,0.3); box-shadow:0 10px 40px rgba(0,255,255,0.3); }
 
             /* File Upload */
             [data-testid="stFileUploadDropzone"] {
-                background: rgba(255,255,255,0.03); border:3px dashed rgba(0,255,255,0.3);
-                border-radius:20px; transition: all 0.4s ease; position: relative;
+                background: rgba(255,255,255,0.05); border:3px dashed rgba(125,200,255,0.35);
+                border-radius:20px; transition: all 0.35s ease; position: relative;
             }
             [data-testid="stFileUploadDropzone"]:hover {
                 background: rgba(0,255,255,0.08); border-color: rgba(0,255,255,0.6);
-                transform: scale(1.02); box-shadow: 0 0 30px rgba(0,255,255,0.3);
+                transform: scale(1.01); box-shadow: 0 0 30px rgba(0,255,255,0.28);
             }
 
             /* Progress bar */
             .stProgress > div > div > div {
-                background: linear-gradient(90deg, #00ffff, #ff00ff); border-radius:10px;
-                animation: progressPulse 2s infinite; box-shadow: 0 0 20px rgba(0,255,255,0.5);
-            }
-            @keyframes progressPulse {
-                0%,100%{ opacity:1; box-shadow: 0 0 20px rgba(0,255,255,0.5); }
-                50%{ opacity:.8; box-shadow: 0 0 40px rgba(255,0,255,0.7); }
+                background: linear-gradient(90deg, #00e1ff, #c06bff); border-radius:10px;
+                box-shadow: 0 0 22px rgba(0,200,255,0.45);
             }
 
             /* Scrollbar */
-            ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
-            ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #764ba2); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
+            ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.06); }
+            ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #6aa0ff, #8a5bf2); border-radius:10px; border: 2px solid rgba(255,255,255,0.12); }
 
             /* Expanders */
-            .streamlit-expanderHeader { background: rgba(255,255,255,0.05) !important; border-radius:10px !important; transition: all 0.3s ease; }
-            .streamlit-expanderHeader:hover { background: rgba(255,255,255,0.08) !important; transform: translateX(5px); }
+            .streamlit-expanderHeader { background: rgba(255,255,255,0.06) !important; border-radius:12px !important; }
 
             /* Hide default Streamlit elements */
             #MainMenu, header, footer { visibility: hidden; }
 
-            /* Force all form labels that default to black/white to bright blue or purple */
+            /* Force labels to bluish/purple (avoid white/black) */
             label, .stMarkdown p label, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label {
-                color: #8bb6ff !important;
+                color: #9dc3ff !important;
             }
         </style>
 
@@ -271,7 +262,7 @@ def inject_custom_css():
         unsafe_allow_html=True,
     )
 
-    # Scroll + mouse animation helpers
+    # Reveal + gentle parallax helpers (lightweight, no blocking)
     components.html(
         """
         <script>
@@ -284,16 +275,6 @@ def inject_custom_css():
         document.addEventListener('DOMContentLoaded', () => {
             const elements = document.querySelectorAll('.reveal-element');
             elements.forEach(el => observer.observe(el));
-        });
-
-        // Gentle parallax for planets/nebula
-        window.addEventListener('scroll', () => {
-            const scrolled = window.pageYOffset;
-            const nebulas = document.querySelectorAll('.nebula');
-            nebulas.forEach((nebula, index) => {
-                const speed = (index + 1) * 0.02;
-                nebula.style.transform = `translateY(${scrolled * speed}px)`;
-            });
         });
         </script>
         """,
@@ -334,27 +315,29 @@ def load_model_safe(file_or_path):
 def show_header():
     st.markdown(
         """
-        <div class="reveal-element title-orbit">
-            <div class="orbit-wrapper">
-                <div class="orbit-ring ring-1">
-                    <div class="orbit-planet p1"></div>
+        <div class="title-zone">
+            <div class="title-orbit reveal-element">
+                <div class="orbit-wrapper">
+                    <div class="orbit-ring ring-1">
+                        <div class="orbit-planet p1"></div>
+                    </div>
+                    <div class="orbit-ring ring-2">
+                        <div class="orbit-planet p2"></div>
+                    </div>
+                    <div class="orbit-ring ring-3">
+                        <div class="orbit-planet p3"></div>
+                    </div>
                 </div>
-                <div class="orbit-ring ring-2">
-                    <div class="orbit-planet p2"></div>
-                </div>
-                <div class="orbit-ring ring-3">
-                    <div class="orbit-planet p3"></div>
-                </div>
+                <h1>Celestial Ai</h1>
             </div>
-            <h1>🌌 Celestial Ai</h1>
-        </div>
-        <p style='text-align:center;color:#a0a0ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:0;'>
-            Advanced Exoplanet Detection System • NASA Space Apps 2025
-        </p>
-        <div style='text-align:center;margin:20px 0;'>
-            <span style='background:linear-gradient(90deg,#667eea,#764ba2);padding:8px 20px;border-radius:25px;color:#fff;font-size:1rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(102,126,234,0.4);display:inline-block;'>
-                ✨ Powered by Your Kepler 10-Feature Model
-            </span>
+            <p style='text-align:center;font-family:Space Grotesk;font-size:1.2rem;margin-top:0;'>
+                Advanced Exoplanet Detection System • NASA Space Apps 2025
+            </p>
+            <div style='text-align:center;margin:16px 0;'>
+                <span style='background:linear-gradient(90deg,#6aa0ff,#8a5bf2);padding:8px 20px;border-radius:25px;color:#fff;font-size:1rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(120,120,255,0.45);display:inline-block;'>
+                    ✨ Powered by Your Kepler 10-Feature Model
+                </span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -368,8 +351,8 @@ show_header()
 with st.sidebar:
     st.markdown(
         """
-        <div class="reveal-element" style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
-                    border-radius:15px;margin-bottom:20px;border:2px solid rgba(0,255,255,0.3);box-shadow:0 8px 30px rgba(0,255,255,0.2);'>
+        <div class="reveal-element" style='text-align:center;padding:20px;background:rgba(255,255,255,0.06);
+                    border-radius:15px;margin-bottom:20px;border:2px solid rgba(255,255,255,0.14);box-shadow:0 8px 30px rgba(0,0,0,0.25);'>
             <h2 style='margin:0;font-size:1.6rem;'>🚀 Control Panel</h2>
         </div>
         """,
@@ -447,8 +430,8 @@ with tab1:
     with col2:
         st.markdown(
             """
-            <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.03);
-                        border-radius:20px;margin-bottom:35px;border:2px solid rgba(0,255,255,0.2);box-shadow:0 10px 40px rgba(0,0,0,0.3);'>
+            <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.06);
+                        border-radius:20px;margin-bottom:35px;border:2px solid rgba(255,255,255,0.14);box-shadow:0 10px 40px rgba(0,0,0,0.28);'>
                 <h3 style='margin:0;font-size:1.8rem;'>🚀 Batch Exoplanet Analysis</h3>
                 <p style='margin-top:15px;font-size:1.05rem;'>
                     Upload a CSV containing the <b>10 Kepler features</b>. We’ll randomly sample <b>10 rows</b> for analysis.
@@ -546,8 +529,8 @@ with tab1:
 with tab2:
     st.markdown(
         """
-        <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.03);
-                    border-radius:20px;margin-bottom:35px;border:2px solid rgba(0,255,255,0.2);box-shadow:0 10px 40px rgba(0,0,0,0.3);'>
+        <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.06);
+                    border-radius:20px;margin-bottom:35px;border:2px solid rgba(255,255,255,0.14);box-shadow:0 10px 40px rgba(0,0,0,0.28);'>
             <h3 style='margin:0;font-size:1.8rem;'>✨ Quick Candidate Classification</h3>
             <p style='margin-top:15px;font-size:1.05rem;'>
                 Enter the <b>10 Kepler features</b> (no pre-filled defaults). Your pretrained pipeline will standardize/encode internally.
@@ -557,16 +540,15 @@ with tab2:
         unsafe_allow_html=True,
     )
 
-    # We use text inputs (instead of number_input) to avoid forced defaults.
-    # We'll validate and parse floats/ints after submission.
+    # Text inputs (no numeric defaults)
     st.markdown("#### 📡 Signal & Score")
     q1, q2, q3 = st.columns(3)
     with q1:
-        v_koi_score = st.text_input("KOI Score (0-1)", placeholder="e.g., 0.58")
+        v_koi_score = st.text_input("KOI Score (0–1)", placeholder="e.g., 0.58")
     with q2:
         v_koi_model_snr = st.text_input("Model Signal-to-Noise Ratio", placeholder="e.g., 22.4")
     with q3:
-        v_koi_impact = st.text_input("Impact Parameter (0-1.5)", placeholder="e.g., 0.47")
+        v_koi_impact = st.text_input("Impact Parameter (0–1.5)", placeholder="e.g., 0.47")
 
     st.markdown("#### 🪐 Geometry & Timing")
     r1, r2, r3 = st.columns(3)
@@ -580,17 +562,13 @@ with tab2:
     st.markdown("#### 🚩 False-Positive Flags")
     f1, f2, f3, f4 = st.columns(4)
     with f1:
-        v_koi_fpflag_nt = st.selectbox("Not Transit-like (0/1)", ['-- select --', 0, 1], index=0,
-                                       help="1 if the signal is not transit-like; otherwise 0")
+        v_koi_fpflag_nt = st.selectbox("Not Transit-like (0/1)", ['-- select --', 0, 1], index=0)
     with f2:
-        v_koi_fpflag_co = st.selectbox("Centroid Offset (0/1)", ['-- select --', 0, 1], index=0,
-                                       help="1 if a centroid offset is detected; otherwise 0")
+        v_koi_fpflag_co = st.selectbox("Centroid Offset (0/1)", ['-- select --', 0, 1], index=0)
     with f3:
-        v_koi_fpflag_ss = st.selectbox("Significant Secondary (0/1)", ['-- select --', 0, 1], index=0,
-                                       help="1 if a significant secondary event exists; otherwise 0")
+        v_koi_fpflag_ss = st.selectbox("Significant Secondary (0/1)", ['-- select --', 0, 1], index=0)
     with f4:
-        v_koi_fpflag_ec = st.selectbox("Eclipsing Binary (0/1)", ['-- select --', 0, 1], index=0,
-                                       help="1 if ephemeris/EB evidence; otherwise 0")
+        v_koi_fpflag_ec = st.selectbox("Eclipsing Binary (0/1)", ['-- select --', 0, 1], index=0)
 
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
@@ -598,7 +576,6 @@ with tab2:
             if pipeline is None or label_encoder is None:
                 st.error("Model not loaded. Upload valid artifacts in the sidebar.")
             else:
-                # Validate inputs
                 errs = []
                 def to_float(x, name):
                     if x is None or str(x).strip() == "":
@@ -652,7 +629,7 @@ with tab2:
                         label = decode_labels(np.array([pred]))[0]
                         confidence = float(proba.max() * 100)
 
-                        time.sleep(0.2)
+                        time.sleep(0.15)
 
                         if label == "CONFIRMED":
                             st.balloons()
@@ -683,14 +660,8 @@ with tab2:
                         st.markdown("### 📊 Probability Distribution")
                         classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]))
                         fig = go.Figure(
-                            data=[
-                                go.Bar(
-                                    x=classes,
-                                    y=(proba * 100).round(2),
-                                    text=[f"{p*100:.1f}%" for p in proba],
-                                    textposition="auto",
-                                )
-                            ]
+                            data=[go.Bar(x=classes, y=(proba * 100).round(2),
+                                         text=[f"{p*100:.1f}%" for p in proba], textposition="auto")]
                         )
                         fig.update_layout(
                             title="Classification Probabilities",
@@ -708,8 +679,8 @@ with tab2:
 with tab3:
     st.markdown(
         """
-        <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.03);
-                    border-radius:20px;margin-bottom:35px;border:2px solid rgba(0,255,255,0.2);box-shadow:0 10px 40px rgba(0,0,0,0.3);'>
+        <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.06);
+                    border-radius:20px;margin-bottom:35px;border:2px solid rgba(255,255,255,0.14);box-shadow:0 10px 40px rgba(0,0,0,0.28);'>
             <h3 style='margin:0;font-size:1.8rem;'>🧠 Pretrained Model</h3>
             <p style='margin-top:15px;font-size:1.05rem;'>
                 The model is already trained and loaded from <b>gb_pipeline.joblib</b> and <b>label_encoder.joblib</b>.
@@ -730,9 +701,9 @@ with tab3:
             **Classes:** FALSE POSITIVE, CANDIDATE, CONFIRMED  
 
             **Advantages:**  
-            - Handles tabular features well  
-            - Robust to scaling (we still standardize in-pipeline)  
-            - Supports missing data via imputation
+            - Strong for tabular data  
+            - Pipeline handles imputation & scaling  
+            - Good robustness on mixed numeric ranges
             """
         )
 
@@ -749,15 +720,15 @@ with tab3:
         )
 
 # -------------------------
-# Tab 4: Visualizations (based on results in session)
+# Tab 4: Visualizations — show ALL charts together (no selection)
 # -------------------------
 with tab4:
     st.markdown(
         """
-        <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.03);
-                    border-radius:20px;margin-bottom:35px;border:2px solid rgba(0,255,255,0.2);box-shadow:0 10px 40px rgba(0,0,0,0.3);'>
+        <div class="reveal-element" style='text-align:center;padding:25px;background:rgba(255,255,255,0.06);
+                    border-radius:20px;margin-bottom:35px;border:2px solid rgba(255,255,255,0.14);box-shadow:0 10px 40px rgba(0,0,0,0.28);'>
             <h3 style='margin:0;font-size:1.8rem;'>📈 Data Visualizations & Analytics</h3>
-            <p style='margin-top:15px;font-size:1.05rem;'>Visualize the predictions you just generated.</p>
+            <p style='margin-top:15px;font-size:1.05rem;'>All plots below use your latest analysis results.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -765,57 +736,49 @@ with tab4:
 
     if "results" in st.session_state:
         results = st.session_state["results"]
-        viz_type = st.selectbox(
-            "Select Visualization",
-            ["Distribution Overview", "Feature Correlations", "Habitable Zone-ish", "3D Explorer"],
-        )
 
-        if viz_type == "Distribution Overview":
-            c1, c2 = st.columns(2)
-            with c1:
-                vc = results["prediction"].value_counts()
-                fig = px.pie(values=vc.values, names=vc.index, title="Classification Distribution")
-                fig.update_traces(textposition="inside", textinfo="percent+label")
-                fig.update_layout(template="plotly_dark", height=400)
-                st.plotly_chart(fig, use_container_width=True)
-            with c2:
-                fig = px.histogram(results, x="confidence", nbins=20, title="Confidence Distribution")
-                fig.update_layout(template="plotly_dark", height=400)
-                st.plotly_chart(fig, use_container_width=True)
+        # Row 1: Distribution pie + Confidence histogram
+        c1, c2 = st.columns(2)
+        with c1:
+            vc = results["prediction"].value_counts()
+            fig_pie = px.pie(values=vc.values, names=vc.index, title="Classification Distribution")
+            fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+            fig_pie.update_layout(template="plotly_dark", height=420)
+            st.plotly_chart(fig_pie, use_container_width=True)
+        with c2:
+            fig_hist = px.histogram(results, x="confidence", nbins=20, title="Confidence Distribution")
+            fig_hist.update_layout(template="plotly_dark", height=420)
+            st.plotly_chart(fig_hist, use_container_width=True)
 
-        elif viz_type == "Feature Correlations":
-            numeric_cols = [c for c in SELECTED_FEATURES if c in results.columns]
-            if len(numeric_cols) >= 3:
-                feats = numeric_cols[:4]
-                fig = px.scatter_matrix(results, dimensions=feats, color="prediction", title="Feature Correlation Matrix")
-                fig.update_layout(template="plotly_dark", height=800)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Not enough numeric features available.")
+        # Row 2: Correlation matrix (if enough numeric columns exist)
+        numeric_cols = [c for c in SELECTED_FEATURES if c in results.columns]
+        if len(numeric_cols) >= 3:
+            feats = numeric_cols[: min(6, len(numeric_cols))]
+            corr = results[feats].corr()
+            fig_heat = px.imshow(corr, title="Feature Correlation Heatmap", color_continuous_scale="Viridis")
+            fig_heat.update_layout(template="plotly_dark", height=550)
+            st.plotly_chart(fig_heat, use_container_width=True)
 
-        elif viz_type == "Habitable Zone-ish":
-            if all(col in results.columns for col in ["koi_prad", "koi_period"]):
-                fig = px.scatter(
-                    results, x="koi_period", y="koi_prad", color="prediction", size="confidence",
-                    title="Radius vs Period (confidence-scaled)"
-                )
-                fig.update_layout(template="plotly_dark", height=600)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Required features missing: koi_period & koi_prad")
+        # Row 3: Radius vs Period (confidence-scaled)
+        if all(col in results.columns for col in ["koi_prad", "koi_period"]):
+            fig_rp = px.scatter(
+                results, x="koi_period", y="koi_prad", color="prediction", size="confidence",
+                title="Radius vs Period (confidence-scaled)"
+            )
+            fig_rp.update_layout(template="plotly_dark", height=540)
+            st.plotly_chart(fig_rp, use_container_width=True)
 
-        elif viz_type == "3D Explorer":
-            have = [c for c in ["koi_model_snr", "koi_prad", "koi_period"] if c in results.columns]
-            if len(have) == 3:
-                fig = px.scatter_3d(
-                    results, x=have[0], y=have[1], z=have[2],
-                    color="prediction", size="confidence",
-                    title="3D Explorer: SNR vs Radius vs Period"
-                )
-                fig.update_layout(template="plotly_dark", height=700)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Need koi_model_snr, koi_prad, koi_period for 3D view.")
+        # Row 4: 3D Explorer
+        have = [c for c in ["koi_model_snr", "koi_prad", "koi_period"] if c in results.columns]
+        if len(have) == 3:
+            fig3d = px.scatter_3d(
+                results, x=have[0], y=have[1], z=have[2],
+                color="prediction", size="confidence",
+                title="3D Explorer: SNR vs Radius vs Period"
+            )
+            fig3d.update_layout(template="plotly_dark", height=700)
+            st.plotly_chart(fig3d, use_container_width=True)
+
     else:
         st.info("📊 Run a batch analysis (Tab 1) to populate visualizations.")
 
@@ -825,7 +788,7 @@ with tab4:
 with tab5:
     st.markdown(
         """
-        <div class="reveal-element" style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);border-radius:15px;margin-bottom:30px;'>
+        <div class="reveal-element" style='text-align:center;padding:20px;background:rgba(255,255,255,0.06);border-radius:15px;margin-bottom:30px;'>
             <h3 style='margin:0;'>ℹ️ About Celestial Ai</h3>
             <p style='margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler 10-feature model edition</p>
         </div>
@@ -851,15 +814,15 @@ with tab5:
             - No random/demo data  
             - Clean UI with metrics & downloads  
             - Plotly visuals and 3D explorer  
-            - Cinematic, Discord-style animations
+            - Cinematic, Discord-style animations (blue/purple theme)
             """
         )
 
     st.markdown("---")
     st.markdown(
         """
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.03);border-radius:15px;'>
-            <h4 style='color:#00ffff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
+        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.06);border-radius:15px;'>
+            <h4 style='color:#8fd8ff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
             <p>Exploring new worlds through AI</p>
         </div>
         """,
@@ -871,12 +834,11 @@ with tab5:
 # =========================
 st.markdown(
     """
-    <div style='text-align:center;margin-top:50px;padding:20px;border-top:1px solid rgba(255,255,255,0.1);'>
+    <div style='text-align:center;margin-top:50px;padding:20px;border-top:1px solid rgba(255,255,255,0.12);'>
         <p style='font-size:0.95rem;'>
-            Celestial Ai • NASA Space Apps 2025 • <span style='color:#00ffff;'>Kepler 10-Feature Pipeline</span>
+            Celestial Ai • NASA Space Apps 2025 • <span style='color:#7bd4ff;'>Kepler 10-Feature Pipeline</span>
         </p>
     </div>
     """,
     unsafe_allow_html=True,
 )
-
