@@ -53,228 +53,228 @@ SAMPLE_CSV_PATH = "/mnt/data/Celestial_AI___Synthetic_Kepler_10-feature_Data_wit
 def inject_custom_css():
     st.markdown(
         """
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
 
-        /* Main animated gradient background */
-        .stApp {
-            background: linear-gradient(-45deg, #0a0118, #1a0033, #0f0c29, #24243e);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-            overflow-x: hidden;
-        }
-        @keyframes gradientShift {
-            0%{background-position:0% 50%}
-            50%{background-position:100% 50%}
-            100%{background-position:0% 50%}
-        }
+            /* Main animated gradient background */
+            .stApp {
+                background: linear-gradient(-45deg, #0a0118, #1a0033, #0f0c29, #24243e);
+                background-size: 400% 400%;
+                animation: gradientShift 15s ease infinite;
+                overflow-x: hidden;
+            }
+            @keyframes gradientShift {
+                0%{background-position:0% 50%}
+                50%{background-position:100% 50%}
+                100%{background-position:0% 50%}
+            }
 
-        /* Star fields (parallax layers) */
-        .stars, .stars2, .stars3 {
-            position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;
-        }
-        .stars {
-            background-image:
-                radial-gradient(2px 2px at 20px 30px, white, transparent),
-                radial-gradient(2px 2px at 40px 70px, white, transparent),
-                radial-gradient(1px 1px at 50px 50px, white, transparent),
-                radial-gradient(1px 1px at 80px 10px, white, transparent),
-                radial-gradient(2px 2px at 130px 80px, white, transparent);
-            background-size:200px 200px; opacity:0.15;
-            animation: stars 60s linear infinite;
-        }
-        @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
-        .stars2 {
-            background-image:
-                radial-gradient(1px 1px at 60px 120px, #bbddff, transparent),
-                radial-gradient(2px 2px at 150px 90px, #ffffff, transparent),
-                radial-gradient(1px 1px at 200px 40px, #aaccff, transparent),
-                radial-gradient(2px 2px at 300px 160px, #ffffff, transparent);
-            background-size:300px 300px; opacity:0.12;
-            animation: stars2 120s linear infinite;
-        }
-        @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
-        .stars3 {
-            background-image:
-                radial-gradient(1px 1px at 120px 60px, #88c0ff, transparent),
-                radial-gradient(2px 2px at 240px 180px, #ffffff, transparent),
-                radial-gradient(1px 1px at 400px 120px, #cfe8ff, transparent);
-            background-size:500px 500px; opacity:0.08;
-            animation: stars3 240s linear infinite;
-        }
-        @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
+            /* Star fields (parallax layers) */
+            .stars, .stars2, .stars3 {
+                position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;
+            }
+            .stars {
+                background-image:
+                    radial-gradient(2px 2px at 20px 30px, white, transparent),
+                    radial-gradient(2px 2px at 40px 70px, white, transparent),
+                    radial-gradient(1px 1px at 50px 50px, white, transparent),
+                    radial-gradient(1px 1px at 80px 10px, white, transparent),
+                    radial-gradient(2px 2px at 130px 80px, white, transparent);
+                background-size:200px 200px; opacity:0.15;
+                animation: stars 60s linear infinite;
+            }
+            @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
+            .stars2 {
+                background-image:
+                    radial-gradient(1px 1px at 60px 120px, #bbddff, transparent),
+                    radial-gradient(2px 2px at 150px 90px, #ffffff, transparent),
+                    radial-gradient(1px 1px at 200px 40px, #aaccff, transparent),
+                    radial-gradient(2px 2px at 300px 160px, #ffffff, transparent);
+                background-size:300px 300px; opacity:0.12;
+                animation: stars2 120s linear infinite;
+            }
+            @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
+            .stars3 {
+                background-image:
+                    radial-gradient(1px 1px at 120px 60px, #88c0ff, transparent),
+                    radial-gradient(2px 2px at 240px 180px, #ffffff, transparent),
+                    radial-gradient(1px 1px at 400px 120px, #cfe8ff, transparent);
+                background-size:500px 500px; opacity:0.08;
+                animation: stars3 240s linear infinite;
+            }
+            @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
 
-        /* Nebula glow */
-        .nebula {
-            position: fixed; width: 600px; height: 600px; pointer-events: none; z-index: 0;
-            opacity: 0.15; filter: blur(100px);
-        }
-        .nebula-1 {
-            top: -200px; left: -200px;
-            background: radial-gradient(circle, rgba(138, 43, 226, 0.4) 0%, transparent 70%);
-            animation: nebulaPulse 20s infinite ease-in-out;
-        }
-        .nebula-2 {
-            bottom: -200px; right: -200px;
-            background: radial-gradient(circle, rgba(0, 191, 255, 0.4) 0%, transparent 70%);
-            animation: nebulaPulse 25s infinite ease-in-out 5s;
-        }
-        @keyframes nebulaPulse { 0%,100% {transform: scale(1) rotate(0deg);} 50% {transform: scale(1.2) rotate(180deg);} }
+            /* Nebula glow */
+            .nebula {
+                position: fixed; width: 600px; height: 600px; pointer-events: none; z-index: 0;
+                opacity: 0.15; filter: blur(100px);
+            }
+            .nebula-1 {
+                top: -200px; left: -200px;
+                background: radial-gradient(circle, rgba(138, 43, 226, 0.4) 0%, transparent 70%);
+                animation: nebulaPulse 20s infinite ease-in-out;
+            }
+            .nebula-2 {
+                bottom: -200px; right: -200px;
+                background: radial-gradient(circle, rgba(0, 191, 255, 0.4) 0%, transparent 70%);
+                animation: nebulaPulse 25s infinite ease-in-out 5s;
+            }
+            @keyframes nebulaPulse { 0%,100% {transform: scale(1) rotate(0deg);} 50% {transform: scale(1.2) rotate(180deg);} }
 
-        /* Title + orbit container */
-        .orbit-title-container {
-            position: relative;
-            width: 480px;
-            height: 220px;
-            margin: 0 auto 10px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transform: translateZ(0);
-        }
+            /* Title + orbit container */
+            .orbit-title-container {
+                position: relative;
+                width: 480px;
+                height: 220px;
+                margin: 0 auto 10px auto;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transform: translateZ(0);
+            }
 
-        /* Title text */
-        .celestial-title {
-            font-family:'Orbitron', monospace !important; font-weight:900 !important;
-            background: linear-gradient(120deg, #00e5ff, #c77dff, #00e5ff);
-            background-size:200% auto; background-clip:text; -webkit-background-clip:text;
-            -webkit-text-fill-color:transparent; animation: shine 3s linear infinite;
-            font-size: 3.2rem; text-align:center; margin: 0; line-height: 1.1;
-            text-shadow: 0 0 40px rgba(0,255,255,0.5);
-        }
-        @keyframes shine { to { background-position: 200% center; } }
+            /* Title text */
+            .celestial-title {
+                font-family:'Orbitron', monospace !important; font-weight:900 !important;
+                background: linear-gradient(120deg, #00e5ff, #c77dff, #00e5ff);
+                background-size:200% auto; background-clip:text; -webkit-background-clip:text;
+                -webkit-text-fill-color:transparent; animation: shine 3s linear infinite;
+                font-size: 3.2rem; text-align:center; margin: 0; line-height: 1.1;
+                text-shadow: 0 0 40px rgba(0,255,255,0.5);
+            }
+            @keyframes shine { to { background-position: 200% center; } }
 
-        /* Circular orbits around the title */
-        .orbit-ring {
-            position: absolute; border: 1px dashed rgba(120, 180, 255, 0.25); border-radius: 50%;
-            animation: orbitRotate 20s linear infinite;
-        }
-        .ring-1 { width: 360px; height: 360px; }
-        .ring-2 { width: 420px; height: 420px; animation-duration: 26s; animation-direction: reverse; }
-        .ring-3 { width: 300px; height: 300px; animation-duration: 32s; }
+            /* Circular orbits around the title */
+            .orbit-ring {
+                position: absolute; border: 1px dashed rgba(120, 180, 255, 0.25); border-radius: 50%;
+                animation: orbitRotate 20s linear infinite;
+            }
+            .ring-1 { width: 360px; height: 360px; }
+            .ring-2 { width: 420px; height: 420px; animation-duration: 26s; animation-direction: reverse; }
+            .ring-3 { width: 300px; height: 300px; animation-duration: 32s; }
 
-        @keyframes orbitRotate { 0%{transform: rotate(0deg);} 100%{transform: rotate(360deg);} }
+            @keyframes orbitRotate { 0%{transform: rotate(0deg);} 100%{transform: rotate(360deg);} }
 
-        /* Planets that orbit along the rings */
-        .planet {
-            position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-            width: 18px; height: 18px; border-radius: 50%;
-            box-shadow: 0 0 12px rgba(0, 255, 255, 0.6);
-        }
-        .planet-1 { background: radial-gradient(circle at 30% 30%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
-        .planet-2 { background: radial-gradient(circle at 30% 30%, #ffd27a, #c05621 60%, #7b341e 100%); width: 22px; height: 22px; top: -8px; }
-        .planet-3 { background: radial-gradient(circle at 30% 30%, #e0b3ff, #8a2be2 60%, #4b0082 100%); width: 14px; height: 14px; top: -5px; }
+            /* Planets that orbit along the rings */
+            .planet {
+                position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+                width: 18px; height: 18px; border-radius: 50%;
+                box-shadow: 0 0 12px rgba(0, 255, 255, 0.6);
+            }
+            .planet-1 { background: radial-gradient(circle at 30% 30%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
+            .planet-2 { background: radial-gradient(circle at 30% 30%, #ffd27a, #c05621 60%, #7b341e 100%); width: 22px; height: 22px; top: -8px; }
+            .planet-3 { background: radial-gradient(circle at 30% 30%, #e0b3ff, #8a2be2 60%, #4b0082 100%); width: 14px; height: 14px; top: -5px; }
 
-        /* Subheading pill under the title */
-        .title-pill {
-            text-align:center; margin: 6px auto 16px auto;
-            display:inline-block; padding: 6px 16px; border-radius: 24px;
-            color:#fff; font-size: 0.95rem; font-family:'Space Grotesk', sans-serif;
-            background: linear-gradient(90deg,#667eea,#764ba2);
-            box-shadow:0 6px 20px rgba(102,126,234,0.4);
-        }
+            /* Subheading pill under the title */
+            .title-pill {
+                text-align:center; margin: 6px auto 16px auto;
+                display:inline-block; padding: 6px 16px; border-radius: 24px;
+                color:#fff; font-size: 0.95rem; font-family:'Space Grotesk', sans-serif;
+                background: linear-gradient(90deg,#667eea,#764ba2);
+                box-shadow:0 6px 20px rgba(102,126,234,0.4);
+            }
 
-        /* General headings */
-        h2, h3 {
-            font-family:'Space Grotesk', sans-serif !important;
-            color:#d7d7ff !important; text-shadow:0 0 12px rgba(100,100,255,0.35);
-        }
+            /* General headings */
+            h2, h3 {
+                font-family:'Space Grotesk', sans-serif !important;
+                color:#d7d7ff !important; text-shadow:0 0 12px rgba(100,100,255,0.35);
+            }
 
-        /* Tabs container */
-        .stTabs [data-baseweb="tab-list"] {
-            background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
-            border-radius:16px; padding:10px; border:1px solid rgba(255,255,255,0.12);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-        }
-        .stTabs [data-baseweb="tab"] {
-            color:#a0a0ff !important; font-family:'Space Grotesk', sans-serif !important;
-            font-weight:700; transition: all .25s ease; position: relative; overflow: hidden;
-        }
-        .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color: #71b7ff !important; }
-        .stTabs [aria-selected="true"] {
-            background: linear-gradient(90deg, rgba(0,255,255,0.18), rgba(255,0,255,0.18));
-            border-radius:12px; box-shadow: 0 4px 18px rgba(0,255,255,0.28);
-        }
+            /* Tabs container */
+            .stTabs [data-baseweb="tab-list"] {
+                background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+                border-radius:16px; padding:10px; border:1px solid rgba(255,255,255,0.12);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            }
+            .stTabs [data-baseweb="tab"] {
+                color:#a0a0ff !important; font-family:'Space Grotesk', sans-serif !important;
+                font-weight:700; transition: all .25s ease; position: relative; overflow: hidden;
+            }
+            .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color: #71b7ff !important; }
+            .stTabs [aria-selected="true"] {
+                background: linear-gradient(90deg, rgba(0,255,255,0.18), rgba(255,0,255,0.18));
+                border-radius:12px; box-shadow: 0 4px 18px rgba(0,255,255,0.28);
+            }
 
-        /* Inputs: blue theme */
-        .stTextInput input, .stNumberInput input, .stSelectbox select, .stSlider > div > div {
-            background: rgba(255,255,255,0.06) !important; border: 2px solid rgba(0,200,255,0.35) !important;
-            color:#e8f1ff !important; border-radius:12px !important; backdrop-filter: blur(5px);
-            transition: all .25s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-        }
-        .stTextInput input:focus, .stNumberInput input:focus {
-            border-color:#66e0ff !important; box-shadow:0 0 28px rgba(0,225,255,0.35), inset 0 2px 4px rgba(0,0,0,0.2) !important;
-            transform: scale(1.01);
-        }
+            /* Inputs: blue theme */
+            .stTextInput input, .stNumberInput input, .stSelectbox select, .stSlider > div > div {
+                background: rgba(255,255,255,0.06) !important; border: 2px solid rgba(0,200,255,0.35) !important;
+                color:#e8f1ff !important; border-radius:12px !important; backdrop-filter: blur(5px);
+                transition: all .25s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            }
+            .stTextInput input:focus, .stNumberInput input:focus {
+                border-color:#66e0ff !important; box-shadow:0 0 28px rgba(0,225,255,0.35), inset 0 2px 4px rgba(0,0,0,0.2) !important;
+                transform: scale(1.01);
+            }
 
-        /* Force all labels/paragraphs to blue/purple hues */
-        label, .stMarkdown p, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stDownloadButton button span, .stButton button span {
-            color: #97b3ff !important;
-        }
+            /* Force all labels/paragraphs to blue/purple hues */
+            label, .stMarkdown p, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stDownloadButton button span, .stButton button span {
+                color: #97b3ff !important;
+            }
 
-        /* Buttons (neon-blue vibe) */
-        .stButton > button, .stDownloadButton > button {
-            background: linear-gradient(135deg, #5ba8ff 0%, #7a5cff 100%);
-            color:white !important; border:none; padding:12px 34px; border-radius:32px;
-            font-weight:800; font-family:'Space Grotesk', sans-serif;
-            transition: all .25s cubic-bezier(0.2, 0.8, 0.2, 1);
-            box-shadow:0 10px 30px rgba(91,168,255,0.35);
-            position: relative; overflow: hidden;
-        }
-        .stButton > button:hover, .stDownloadButton > button:hover {
-            transform: translateY(-3px) scale(1.03);
-            box-shadow:0 12px 38px rgba(122,92,255,0.45);
-        }
+            /* Buttons (neon-blue vibe) */
+            .stButton > button, .stDownloadButton > button {
+                background: linear-gradient(135deg, #5ba8ff 0%, #7a5cff 100%);
+                color:white !important; border:none; padding:12px 34px; border-radius:32px;
+                font-weight:800; font-family:'Space Grotesk', sans-serif;
+                transition: all .25s cubic-bezier(0.2, 0.8, 0.2, 1);
+                box-shadow:0 10px 30px rgba(91,168,255,0.35);
+                position: relative; overflow: hidden;
+            }
+            .stButton > button:hover, .stDownloadButton > button:hover {
+                transform: translateY(-3px) scale(1.03);
+                box-shadow:0 12px 38px rgba(122,92,255,0.45);
+            }
 
-        /* Alerts, metrics, upload dropzone */
-        .stAlert {
-            background: rgba(255,255,255,0.06) !important; backdrop-filter: blur(10px);
-            border:2px solid rgba(255,255,255,0.22); border-radius:16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        }
-        [data-testid="metric-container"] {
-            background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
-            border:2px solid rgba(255,255,255,0.12); padding:16px; border-radius:16px;
-            box-shadow:0 8px 26px rgba(0,0,0,0.3);
-            transition: all .25s ease;
-        }
-        [data-testid="metric-container"]:hover {
-            transform: translateY(-3px) scale(1.01); border-color: rgba(0,200,255,0.35);
-            box-shadow:0 10px 34px rgba(0,200,255,0.25);
-        }
-        [data-testid="stFileUploadDropzone"] {
-            background: rgba(255,255,255,0.05);
-            border:3px dashed rgba(0,200,255,0.35); border-radius:18px;
-            transition: all .25s ease;
-        }
-        [data-testid="stFileUploadDropzone"]:hover {
-            background: rgba(0,200,255,0.10); border-color: rgba(0,255,255,0.65);
-            box-shadow: 0 0 22px rgba(0,255,255,0.25);
-        }
+            /* Alerts, metrics, upload dropzone */
+            .stAlert {
+                background: rgba(255,255,255,0.06) !important; backdrop-filter: blur(10px);
+                border:2px solid rgba(255,255,255,0.22); border-radius:16px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            }
+            [data-testid="metric-container"] {
+                background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+                border:2px solid rgba(255,255,255,0.12); padding:16px; border-radius:16px;
+                box-shadow:0 8px 26px rgba(0,0,0,0.3);
+                transition: all .25s ease;
+            }
+            [data-testid="metric-container"]:hover {
+                transform: translateY(-3px) scale(1.01); border-color: rgba(0,200,255,0.35);
+                box-shadow:0 10px 34px rgba(0,200,255,0.25);
+            }
+            [data-testid="stFileUploadDropzone"] {
+                background: rgba(255,255,255,0.05);
+                border:3px dashed rgba(0,200,255,0.35); border-radius:18px;
+                transition: all .25s ease;
+            }
+            [data-testid="stFileUploadDropzone"]:hover {
+                background: rgba(0,200,255,0.10); border-color: rgba(0,255,255,0.65);
+                box-shadow: 0 0 22px rgba(0,255,255,0.25);
+            }
 
-        /* Progress bar */
-        .stProgress > div > div > div {
-            background: linear-gradient(90deg, #00ffff, #ff00ff);
-            border-radius:10px; animation: pulse 2s infinite;
-            box-shadow: 0 0 20px rgba(0,255,255,0.4);
-        }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.85} }
+            /* Progress bar */
+            .stProgress > div > div > div {
+                background: linear-gradient(90deg, #00ffff, #ff00ff);
+                border-radius:10px; animation: pulse 2s infinite;
+                box-shadow: 0 0 20px rgba(0,255,255,0.4);
+            }
+            @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.85} }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #764ba2); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
+            /* Scrollbar */
+            ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
+            ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #764ba2); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
 
-        /* Hide default menu */
-        #MainMenu, header, footer { visibility: hidden; }
+            /* Hide default menu */
+            #MainMenu, header, footer { visibility: hidden; }
 
-        .main .block-container { position:relative; z-index:5; padding-top: 1.5rem; }
-    </style>
-    <div class="stars"></div>
-    <div class="stars2"></div>
-    <div class="stars3"></div>
-    <div class="nebula nebula-1"></div>
-    <div class="nebula nebula-2"></div>
-    """,
+            .main .block-container { position:relative; z-index:5; padding-top: 1.5rem; }
+        </style>
+        <div class="stars"></div>
+        <div class="stars2"></div>
+        <div class="stars3"></div>
+        <div class="nebula nebula-1"></div>
+        <div class="nebula nebula-2"></div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -352,7 +352,7 @@ with st.sidebar:
                     border-radius:16px;margin-bottom:16px;border:1px solid rgba(0,255,255,0.25);'>
             <h2 style='margin:0;font-size:1.45rem;'>🚀 Control Panel</h2>
         </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
@@ -411,7 +411,7 @@ with tab1:
                     Upload a CSV with the <b>10 Kepler features</b>. Or analyze 10 random rows from the bundled sample CSV.
                 </p>
             </div>
-        """,
+            """,
             unsafe_allow_html=True,
         )
 
@@ -437,9 +437,7 @@ with tab1:
     # If no upload, show helper to analyze 10 rows from bundled CSV
     if df is None:
         st.markdown(
-            """
-            <div style='margin-top:8px;margin-bottom:12px;'>Or:</div>
-            """,
+            "<div style='margin-top:8px;margin-bottom:12px;'>Or:</div>",
             unsafe_allow_html=True,
         )
         cbtn = st.columns([1, 1, 1])
@@ -546,7 +544,7 @@ with tab2:
             <h3 style='margin:0;'>✨ Quick Candidate Classification</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>Enter values for the trained 10 features. (No defaults.)</p>
         </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
@@ -668,11 +666,16 @@ with tab3:
             <h3 style='margin:0;'>🧠 Pretrained & Retrain</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>Optionally upload a labeled CSV (with <code>koi_disposition</code>) to retrain the model.</p>
         </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
-    train_file = st.file_uploader("Upload Training Dataset (CSV with 10 features + 'koi_disposition')", type=["csv"], key="training_file")
+    train_file = st.file_uploader(
+        "Upload Training Dataset (CSV with 10 features + 'koi_disposition')",
+        type=["csv"],
+        key="training_file",
+    )
+
     if train_file is not None:
         try:
             train_df = pd.read_csv(train_file, comment="#")
@@ -764,7 +767,7 @@ with tab4:
             <h3 style='margin:0;'>📈 Data Visualizations</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>All plots displayed together (Distribution, Confidence, Correlations, Radius vs Period, 3D Explorer).</p>
         </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
@@ -851,7 +854,7 @@ with tab5:
             <h3 style='margin:0;'>ℹ️ About Celestial Ai</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler 10-feature model edition</p>
         </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
@@ -883,7 +886,7 @@ with tab5:
             <h4 style='color:#77e1ff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
             <p style='color:#b2c5ff;'>Exploring new worlds through AI</p>
         </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
@@ -899,8 +902,6 @@ st.markdown(
         </p>
     </div>
     """,
-    unsafe_allow_html=True,
-)
     unsafe_allow_html=True,
 )
 
