@@ -43,9 +43,8 @@ SELECTED_FEATURES = [
     "koi_prad",
     "koi_period",
 ]
-
-# Path to the bundled sample CSV (used for the 10-row sample analysis button)
-SAMPLE_CSV_PATH = "/mnt/data/Celestial_AI___Synthetic_Kepler_10-feature_Data_with_Labels__preview_.csv"
+# Put this near the top of your app.py
+SAMPLE_CSV_PATH = "/mnt/data/Celestial_AI__Synthetic_Kepler_10-feature_Data_with_Labelspreview.csv"
 
 # =========================
 # CSS / Theme (keep visuals; force black/white text to blue/purple hues)
@@ -922,5 +921,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
