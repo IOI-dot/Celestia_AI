@@ -1,9 +1,6 @@
-# app.py
 # Celestial Ai (Kepler 10-feature edition) — Streamlit app
-# Beautiful UI (Discord-style), no synthetic random generation for analysis,
-# Three planets orbiting around the title, batch + single classify, all visuals displayed together,
-# and a "Pretrained & Retrain" tab to optionally retrain from a user CSV.
-# Default sample CSV is bundled and used for the "Analyze 10 from sample" button.
+# Integrates trained pipeline: gb_pipeline.joblib + label_encoder.joblib
+# Beautiful UI with Discord-style effects, NO RANDOM DATA, batch + single classify, retrain, and all-in-one visuals
 
 import streamlit as st
 import pandas as pd
@@ -15,8 +12,17 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import HistGradientBoostingClassifier
+import streamlit.components.v1 as components
+from pathlib import Path
+import base64
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 
 # =========================
 # Page Configuration
@@ -25,11 +31,11 @@ st.set_page_config(
     page_title="Celestial Ai - NASA Exoplanet Detection",
     layout="wide",
     page_icon="🌌",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
 
 # =========================
-# Constants / Features
+# Constants / Data Pathing (bundled default dataset)
 # =========================
 SELECTED_FEATURES = [
     "koi_score",
@@ -43,257 +49,296 @@ SELECTED_FEATURES = [
     "koi_prad",
     "koi_period",
 ]
-# Put this near the top of your app.py
-SAMPLE_CSV_PATH = "/mnt/data/Celestial_AI__Synthetic_Kepler_10-feature_Data_with_Labelspreview.csv"
+
+APP_DIR = Path(__file__).parent
+DATA_DIR = APP_DIR / "data"
+DATA_DIR.mkdir(exist_ok=True)
+
+BUNDLED_CSV_NAME = "Celestial_AI___Synthetic_Kepler_10-feature_Data_with_Labels__preview_.csv"
+BUNDLED_CSV_PATH = DATA_DIR / BUNDLED_CSV_NAME
+
+# Embedded 10-row fallback (guarantees feature works on new device if bundled CSV is missing)
+EMBEDDED_CSV_B64 = base64.b64encode(
+    b"koi_score,koi_fpflag_nt,koi_model_snr,koi_fpflag_co,koi_fpflag_ss,koi_fpflag_ec,koi_impact,koi_duration,koi_prad,koi_period,koi_disposition\n"
+    b"0.73,0,19.2,0,0,0,0.41,9.7,1.6,28.5,CONFIRMED\n"
+    b"0.62,0,14.8,0,0,0,0.32,11.1,1.2,41.0,CANDIDATE\n"
+    b"0.15,1,6.3,1,0,0,1.05,4.1,3.7,3.2,FALSE POSITIVE\n"
+    b"0.58,0,22.9,0,0,0,0.27,12.2,1.9,74.4,CANDIDATE\n"
+    b"0.81,0,33.5,0,0,0,0.55,8.9,1.3,15.8,CONFIRMED\n"
+    b"0.09,1,5.1,0,1,1,1.12,2.7,0.9,1.9,FALSE POSITIVE\n"
+    b"0.67,0,18.0,0,0,0,0.44,10.0,2.1,90.3,CANDIDATE\n"
+    b"0.84,0,29.6,0,0,0,0.38,7.4,1.1,36.7,CONFIRMED\n"
+    b"0.22,1,9.4,0,1,0,0.98,6.1,4.0,2.8,FALSE POSITIVE\n"
+    b"0.76,0,24.3,0,0,0,0.29,11.4,1.4,52.2,CONFIRMED\n"
+).decode("utf-8")
+
+
+@st.cache_data(show_spinner=False)
+def get_default_dataset() -> pd.DataFrame:
+    """
+    Load the default CSV from a repo-bundled relative path.
+    If it's missing, create it from the embedded 10-row CSV so every new device still works.
+    """
+    if not BUNDLED_CSV_PATH.exists():
+        try:
+            raw = base64.b64decode(EMBEDDED_CSV_B64.encode("utf-8"))
+            with open(BUNDLED_CSV_PATH, "wb") as f:
+                f.write(raw)
+        except Exception as e:
+            raise RuntimeError(f"Failed to materialize embedded CSV fallback: {e}")
+    df = pd.read_csv(BUNDLED_CSV_PATH)
+    df.columns = df.columns.str.strip()
+    return df
 
 # =========================
-# CSS / Theme (keep visuals; force black/white text to blue/purple hues)
+# Enhanced CSS with Discord-style animations + orbiting planets + blue/purple labels
 # =========================
 def inject_custom_css():
-    st.markdown(
-        """
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
+    st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;700&display=swap');
 
-            /* Main animated gradient background */
-            .stApp {
-                background: linear-gradient(-45deg, #0a0118, #1a0033, #0f0c29, #24243e);
-                background-size: 400% 400%;
-                animation: gradientShift 15s ease infinite;
-                overflow-x: hidden;
-            }
-            @keyframes gradientShift {
-                0%{background-position:0% 50%}
-                50%{background-position:100% 50%}
-                100%{background-position:0% 50%}
-            }
+        .stApp {
+            background: linear-gradient(-45deg, #0a0118, #1a0033, #0f0c29, #24243e);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            overflow-x: hidden;
+        }
+        @keyframes gradientShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-            /* Star fields (parallax layers) */
-            .stars, .stars2, .stars3 {
-                position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;
-            }
-            .stars {
-                background-image:
-                    radial-gradient(2px 2px at 20px 30px, white, transparent),
-                    radial-gradient(2px 2px at 40px 70px, white, transparent),
-                    radial-gradient(1px 1px at 50px 50px, white, transparent),
-                    radial-gradient(1px 1px at 80px 10px, white, transparent),
-                    radial-gradient(2px 2px at 130px 80px, white, transparent);
-                background-size:200px 200px; opacity:0.15;
-                animation: stars 60s linear infinite;
-            }
-            @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
-            .stars2 {
-                background-image:
-                    radial-gradient(1px 1px at 60px 120px, #bbddff, transparent),
-                    radial-gradient(2px 2px at 150px 90px, #ffffff, transparent),
-                    radial-gradient(1px 1px at 200px 40px, #aaccff, transparent),
-                    radial-gradient(2px 2px at 300px 160px, #ffffff, transparent);
-                background-size:300px 300px; opacity:0.12;
-                animation: stars2 120s linear infinite;
-            }
-            @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
-            .stars3 {
-                background-image:
-                    radial-gradient(1px 1px at 120px 60px, #88c0ff, transparent),
-                    radial-gradient(2px 2px at 240px 180px, #ffffff, transparent),
-                    radial-gradient(1px 1px at 400px 120px, #cfe8ff, transparent);
-                background-size:500px 500px; opacity:0.08;
-                animation: stars3 240s linear infinite;
-            }
-            @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
+        /* Parallax star layers */
+        .stars, .stars2, .stars3 { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+        .stars{
+            background-image:
+                radial-gradient(2px 2px at 20px 30px, white, transparent),
+                radial-gradient(2px 2px at 40px 70px, white, transparent),
+                radial-gradient(1px 1px at 50px 50px, white, transparent),
+                radial-gradient(1px 1px at 80px 10px, white, transparent),
+                radial-gradient(2px 2px at 130px 80px, white, transparent);
+            background-repeat: repeat; background-size:200px 200px;
+            animation: stars 60s linear infinite; opacity:0.15;
+        }
+        .stars2{
+            background-image:
+                radial-gradient(1px 1px at 60px 120px, #bbddff, transparent),
+                radial-gradient(2px 2px at 150px 90px, #ffffff, transparent),
+                radial-gradient(1px 1px at 200px 40px, #aaccff, transparent),
+                radial-gradient(2px 2px at 300px 160px, #ffffff, transparent);
+            background-repeat: repeat; background-size:300px 300px;
+            animation: stars2 120s linear infinite; opacity:0.12;
+        }
+        .stars3{
+            background-image:
+                radial-gradient(1px 1px at 120px 60px, #88c0ff, transparent),
+                radial-gradient(2px 2px at 240px 180px, #ffffff, transparent),
+                radial-gradient(1px 1px at 400px 120px, #cfe8ff, transparent);
+            background-repeat: repeat; background-size:500px 500px;
+            animation: stars3 240s linear infinite; opacity:0.08;
+        }
+        @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
+        @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
+        @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
 
-            /* Nebula glow */
-            .nebula {
-                position: fixed; width: 600px; height: 600px; pointer-events: none; z-index: 0;
-                opacity: 0.15; filter: blur(100px);
-            }
-            .nebula-1 {
-                top: -200px; left: -200px;
-                background: radial-gradient(circle, rgba(138, 43, 226, 0.4) 0%, transparent 70%);
-                animation: nebulaPulse 20s infinite ease-in-out;
-            }
-            .nebula-2 {
-                bottom: -200px; right: -200px;
-                background: radial-gradient(circle, rgba(0, 191, 255, 0.4) 0%, transparent 70%);
-                animation: nebulaPulse 25s infinite ease-in-out 5s;
-            }
-            @keyframes nebulaPulse { 0%,100% {transform: scale(1) rotate(0deg);} 50% {transform: scale(1.2) rotate(180deg);} }
+        .main .block-container { position:relative; z-index:10; padding-top:2rem; }
 
-            /* Title + orbit container */
-            .orbit-title-container {
-                position: relative;
-                width: 480px;
-                height: 220px;
-                margin: 0 auto 10px auto;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transform: translateZ(0);
-            }
+        /* Animated title + orbiting planets wrapper */
+        .title-wrap { position: relative; display: inline-block; padding: 30px 60px; }
+        .orbit {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px dashed rgba(100, 100, 255, 0.25);
+            pointer-events: none;
+        }
+        .orbit.o1 { width: 380px; height: 380px; animation: orbitRotate 24s linear infinite; }
+        .orbit.o2 { width: 540px; height: 540px; animation: orbitRotate 36s linear infinite reverse; }
+        .orbit.o3 { width: 700px; height: 700px; animation: orbitRotate 48s linear infinite; }
+        @keyframes orbitRotate { 0% { transform: translate(-50%, -50%) rotate(0deg);} 100% { transform: translate(-50%, -50%) rotate(360deg);} }
 
-            /* Title text */
-            .celestial-title {
-                font-family:'Orbitron', monospace !important; font-weight:900 !important;
-                background: linear-gradient(120deg, #00e5ff, #c77dff, #00e5ff);
-                background-size:200% auto; background-clip:text; -webkit-background-clip:text;
-                -webkit-text-fill-color:transparent; animation: shine 3s linear infinite;
-                font-size: 3.2rem; text-align:center; margin: 0; line-height: 1.1;
-                text-shadow: 0 0 40px rgba(0,255,255,0.5);
-            }
-            @keyframes shine { to { background-position: 200% center; } }
+        .planet {
+            position: absolute; border-radius: 50%; box-shadow: 0 0 20px rgba(0,200,255,0.4);
+        }
+        .p1 { width: 26px; height: 26px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); top: -13px; left: 50%; transform: translateX(-50%); }
+        .p2 { width: 34px; height: 34px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); top: -17px; left: 50%; transform: translateX(-50%); }
+        .p3 { width: 18px; height: 18px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); top: -9px; left: 50%; transform: translateX(-50%); }
 
-            /* Circular orbits around the title */
-            .orbit-ring {
-                position: absolute; border: 1px dashed rgba(120, 180, 255, 0.25); border-radius: 50%;
-                animation: orbitRotate 20s linear infinite;
-            }
-            .ring-1 { width: 360px; height: 360px; }
-            .ring-2 { width: 420px; height: 420px; animation-duration: 26s; animation-direction: reverse; }
-            .ring-3 { width: 300px; height: 300px; animation-duration: 32s; }
+        h1 {
+            font-family:'Orbitron', monospace !important; font-weight:900 !important;
+            background: linear-gradient(120deg, #00ffff, #ff00ff, #8b5cf6, #00ffff);
+            background-size:200% auto; background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+            animation: shine 3s linear infinite;
+            text-align:center; font-size:3.6rem !important; margin:0 !important;
+            text-shadow:0 0 40px rgba(0,255,255,0.6);
+        }
+        @keyframes shine { to { background-position: 200% center; } }
 
-            @keyframes orbitRotate { 0%{transform: rotate(0deg);} 100%{transform: rotate(360deg);} }
+        h2,h3 { font-family:'Space Grotesk', sans-serif !important; color:#b9c4ff !important; text-shadow:0 0 15px rgba(100,100,255,0.35); }
 
-            /* Planets that orbit along the rings */
-            .planet {
-                position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-                width: 18px; height: 18px; border-radius: 50%;
-                box-shadow: 0 0 12px rgba(0, 255, 255, 0.6);
-            }
-            .planet-1 { background: radial-gradient(circle at 30% 30%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
-            .planet-2 { background: radial-gradient(circle at 30% 30%, #ffd27a, #c05621 60%, #7b341e 100%); width: 22px; height: 22px; top: -8px; }
-            .planet-3 { background: radial-gradient(circle at 30% 30%, #e0b3ff, #8a2be2 60%, #4b0082 100%); width: 14px; height: 14px; top: -5px; }
+        .stTabs [data-baseweb="tab-list"] {
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
+            border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .stTabs [data-baseweb="tab"] {
+            color:#8ab4ff !important; font-family:'Space Grotesk', sans-serif !important; font-weight:700;
+            transition: all .3s ease;
+        }
+        .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color:#7c3aed !important; }
+        .stTabs [aria-selected="true"] {
+            background: linear-gradient(90deg, rgba(0,255,255,0.18), rgba(139,92,246,0.25));
+            border-radius:10px; box-shadow: 0 4px 20px rgba(0,255,255,0.28);
+        }
 
-            /* Subheading pill under the title */
-            .title-pill {
-                text-align:center; margin: 6px auto 16px auto;
-                display:inline-block; padding: 6px 16px; border-radius: 24px;
-                color:#fff; font-size: 0.95rem; font-family:'Space Grotesk', sans-serif;
-                background: linear-gradient(90deg,#667eea,#764ba2);
-                box-shadow:0 6px 20px rgba(102,126,234,0.4);
-            }
+        .stTextInput input, .stNumberInput input, .stSelectbox select, .stSlider label {
+            background: rgba(255,255,255,0.05) !important; border: 2px solid rgba(0,255,255,0.3) !important;
+            color:#e6e6ff !important; border-radius:10px !important; backdrop-filter: blur(5px);
+            transition: all .3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .stTextInput input:focus, .stNumberInput input:focus {
+            border-color:#7c3aed !important; box-shadow:0 0 30px rgba(124,58,237,0.45), inset 0 2px 4px rgba(0,0,0,0.2) !important;
+            transform: scale(1.02);
+        }
 
-            /* General headings */
-            h2, h3 {
-                font-family:'Space Grotesk', sans-serif !important;
-                color:#d7d7ff !important; text-shadow:0 0 12px rgba(100,100,255,0.35);
-            }
+        .stButton > button {
+            background: linear-gradient(135deg, #667eea 0%, #7c3aed 100%); color:#f1f1ff; border:none;
+            padding:12px 35px; border-radius:30px; font-weight:800; font-family:'Space Grotesk', sans-serif;
+            transition: all .25s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 6px 20px rgba(102,126,234,0.4);
+            position: relative; overflow: hidden;
+        }
+        .stButton > button:hover { transform: translateY(-2px) scale(1.02); box-shadow:0 10px 35px rgba(124,58,237,0.5); }
 
-            /* Tabs container */
-            .stTabs [data-baseweb="tab-list"] {
-                background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
-                border-radius:16px; padding:10px; border:1px solid rgba(255,255,255,0.12);
-                box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-            }
-            .stTabs [data-baseweb="tab"] {
-                color:#a0a0ff !important; font-family:'Space Grotesk', sans-serif !important;
-                font-weight:700; transition: all .25s ease; position: relative; overflow: hidden;
-            }
-            .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color: #71b7ff !important; }
-            .stTabs [aria-selected="true"] {
-                background: linear-gradient(90deg, rgba(0,255,255,0.18), rgba(255,0,255,0.18));
-                border-radius:12px; box-shadow: 0 4px 18px rgba(0,255,255,0.28);
-            }
+        .stAlert {
+            background: rgba(255,255,255,0.05) !important; backdrop-filter: blur(10px);
+            border:2px solid rgba(255,255,255,0.2); border-radius:15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
 
-            /* Inputs: blue theme */
-            .stTextInput input, .stNumberInput input, .stSelectbox select, .stSlider > div > div {
-                background: rgba(255,255,255,0.06) !important; border: 2px solid rgba(0,200,255,0.35) !important;
-                color:#e8f1ff !important; border-radius:12px !important; backdrop-filter: blur(5px);
-                transition: all .25s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-            }
-            .stTextInput input:focus, .stNumberInput input:focus {
-                border-color:#66e0ff !important; box-shadow:0 0 28px rgba(0,225,255,0.35), inset 0 2px 4px rgba(0,0,0,0.2) !important;
-                transform: scale(1.01);
-            }
+        [data-testid="metric-container"] {
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
+            border:2px solid rgba(255,255,255,0.1); padding:20px; border-radius:15px;
+            box-shadow:0 6px 25px rgba(0,0,0,0.3); transition: all 0.25s ease; position: relative; overflow: hidden;
+        }
+        [data-testid="metric-container"]:hover {
+            transform: translateY(-3px) scale(1.01);
+            border-color: rgba(124,58,237,0.35);
+            box-shadow:0 10px 40px rgba(124,58,237,0.35);
+        }
 
-            /* Force all labels/paragraphs to blue/purple hues */
-            label, .stMarkdown p, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stDownloadButton button span, .stButton button span {
-                color: #97b3ff !important;
-            }
+        [data-testid="stFileUploadDropzone"] {
+            background: rgba(255,255,255,0.03); border:3px dashed rgba(124,58,237,0.35);
+            border-radius:20px; transition: all 0.25s ease;
+        }
+        [data-testid="stFileUploadDropzone"]:hover { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.6); transform: scale(1.01); }
 
-            /* Buttons (neon-blue vibe) */
-            .stButton > button, .stDownloadButton > button {
-                background: linear-gradient(135deg, #5ba8ff 0%, #7a5cff 100%);
-                color:white !important; border:none; padding:12px 34px; border-radius:32px;
-                font-weight:800; font-family:'Space Grotesk', sans-serif;
-                transition: all .25s cubic-bezier(0.2, 0.8, 0.2, 1);
-                box-shadow:0 10px 30px rgba(91,168,255,0.35);
-                position: relative; overflow: hidden;
-            }
-            .stButton > button:hover, .stDownloadButton > button:hover {
-                transform: translateY(-3px) scale(1.03);
-                box-shadow:0 12px 38px rgba(122,92,255,0.45);
-            }
+        .stProgress > div > div > div {
+            background: linear-gradient(90deg, #00ffff, #7c3aed);
+            border-radius:10px; animation: progressPulse 2s infinite; box-shadow: 0 0 20px rgba(0,255,255,0.5);
+        }
+        @keyframes progressPulse { 0%,100%{opacity:1; box-shadow: 0 0 20px rgba(0,255,255,0.5);} 50%{opacity:.85; box-shadow: 0 0 40px rgba(124,58,237,0.7);} }
 
-            /* Alerts, metrics, upload dropzone */
-            .stAlert {
-                background: rgba(255,255,255,0.06) !important; backdrop-filter: blur(10px);
-                border:2px solid rgba(255,255,255,0.22); border-radius:16px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            }
-            [data-testid="metric-container"] {
-                background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
-                border:2px solid rgba(255,255,255,0.12); padding:16px; border-radius:16px;
-                box-shadow:0 8px 26px rgba(0,0,0,0.3);
-                transition: all .25s ease;
-            }
-            [data-testid="metric-container"]:hover {
-                transform: translateY(-3px) scale(1.01); border-color: rgba(0,200,255,0.35);
-                box-shadow:0 10px 34px rgba(0,200,255,0.25);
-            }
-            [data-testid="stFileUploadDropzone"] {
-                background: rgba(255,255,255,0.05);
-                border:3px dashed rgba(0,200,255,0.35); border-radius:18px;
-                transition: all .25s ease;
-            }
-            [data-testid="stFileUploadDropzone"]:hover {
-                background: rgba(0,200,255,0.10); border-color: rgba(0,255,255,0.65);
-                box-shadow: 0 0 22px rgba(0,255,255,0.25);
-            }
+        ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #7c3aed); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
 
-            /* Progress bar */
-            .stProgress > div > div > div {
-                background: linear-gradient(90deg, #00ffff, #ff00ff);
-                border-radius:10px; animation: pulse 2s infinite;
-                box-shadow: 0 0 20px rgba(0,255,255,0.4);
-            }
-            @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.85} }
+        .streamlit-expanderHeader { background: rgba(255,255,255,0.07) !important; border-radius:10px !important; color:#a8b4ff !important; }
+        .streamlit-expanderHeader:hover { background: rgba(124,58,237,0.1) !important; }
 
-            /* Scrollbar */
-            ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
-            ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #764ba2); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
+        /* Force all labels that default to black/white into blue/purple */
+        label, .stMarkdown p label, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stRadio label, .stCheckbox label {
+            color: #8ab4ff !important;
+        }
+        .stMarkdown, p, span, li {
+            color:#c7d2ff !important;
+        }
+        #MainMenu, header, footer { visibility: hidden; }
+    </style>
+    """, unsafe_allow_html=True)
 
-            /* Hide default menu */
-            #MainMenu, header, footer { visibility: hidden; }
-
-            .main .block-container { position:relative; z-index:5; padding-top: 1.5rem; }
-        </style>
-        <div class="stars"></div>
-        <div class="stars2"></div>
-        <div class="stars3"></div>
-        <div class="nebula nebula-1"></div>
-        <div class="nebula nebula-2"></div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Parallax star layers
+    st.markdown("""
+    <div class="stars"></div>
+    <div class="stars2"></div>
+    <div class="stars3"></div>
+    """, unsafe_allow_html=True)
 
 inject_custom_css()
 
 # =========================
+# Header with orbiting planets
+# =========================
+def show_header():
+    st.markdown("""
+        <div style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
+            <div class="title-wrap">
+                <div class="orbit o3"><div class="planet p3"></div></div>
+                <div class="orbit o2"><div class="planet p2"></div></div>
+                <div class="orbit o1"><div class="planet p1"></div></div>
+                <h1>🌌 Celestial Ai</h1>
+            </div>
+        </div>
+        <p style='text-align:center;color:#9bb3ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:8px;'>
+            Advanced Exoplanet Detection System • NASA Space Apps 2025
+        </p>
+        <div style='text-align:center;margin:16px 0;'>
+            <span style='background:linear-gradient(90deg,#667eea,#7c3aed);padding:8px 18px;border-radius:22px;color:#fff;font-size:.95rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(102,126,234,0.35);display:inline-block;'>
+                ✨ Powered by a Kepler 10-Feature Model
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
+
+show_header()
+
+# =========================
+# Sidebar: Model Controls (no demo toggles)
+# =========================
+with st.sidebar:
+    st.markdown("""
+        <div style='text-align:center;padding:18px;background:rgba(255,255,255,0.05);
+                    border-radius:15px;margin-bottom:16px;border:1px solid rgba(0,255,255,0.28);'>
+            <h2 style='margin:0;font-size:1.45rem;'>🚀 Control Panel</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("🔧 Model Configuration", expanded=True):
+        model_upload = st.file_uploader("Upload Pipeline (.joblib)", type=["joblib"], key="model")
+        encoder_upload = st.file_uploader("Upload Encoder (.joblib)", type=["joblib"], key="encoder")
+
+    @st.cache_resource
+    def load_model_safe(file_or_path):
+        try:
+            return joblib.load(file_or_path)
+        except Exception:
+            return None
+
+    pipeline = None
+    label_encoder = None
+
+    if model_upload and encoder_upload:
+        pipeline = load_model_safe(model_upload)
+        label_encoder = load_model_safe(encoder_upload)
+        if pipeline and label_encoder:
+            st.success("✅ Custom artifacts loaded (uploaded).")
+        else:
+            st.error("❌ Failed to load uploaded artifacts.")
+    else:
+        pipeline = load_model_safe("gb_pipeline.joblib")
+        label_encoder = load_model_safe("label_encoder.joblib")
+        if pipeline and label_encoder:
+            st.info("📁 Using local artifacts: gb_pipeline.joblib + label_encoder.joblib")
+        else:
+            st.error("❌ Could not load model artifacts. Upload valid .joblib files above.")
+
+    st.markdown("### 📊 System Status")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric("Model", "✅ Ready" if (pipeline is not None and label_encoder is not None) else "❌ Missing")
+    with c2:
+        st.metric("Features", f"{len(SELECTED_FEATURES)} used", delta="Kepler 10-feature")
+
+# =========================
 # Utilities
 # =========================
-@st.cache_resource
-def load_model_safe(file_or_path):
-    try:
-        return joblib.load(file_or_path)
-    except Exception:
-        return None
-
 def align_features_df(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ensure the dataframe has exactly the required 10 features, numeric, in order.
-    NOTE: The loaded sklearn Pipeline handles imputation + scaling internally.
-    """
+    """Ensure exactly the required 10 features, numeric, ordered. Pipeline handles impute + scale."""
     X = df.copy()
     for col in SELECTED_FEATURES:
         if col not in X.columns:
@@ -302,7 +347,7 @@ def align_features_df(df: pd.DataFrame) -> pd.DataFrame:
         X[col] = pd.to_numeric(X[col], errors="coerce").fillna(0.0)
     return X[SELECTED_FEATURES]
 
-def decode_labels(y_pred_int: np.ndarray, label_encoder) -> np.ndarray:
+def decode_labels(y_pred_int: np.ndarray) -> np.ndarray:
     try:
         if hasattr(label_encoder, "inverse_transform"):
             return label_encoder.inverse_transform(y_pred_int)
@@ -313,119 +358,40 @@ def decode_labels(y_pred_int: np.ndarray, label_encoder) -> np.ndarray:
         return np.array([classes_[i] for i in y_pred_int])
 
 # =========================
-# Header with orbiting planets
-# =========================
-def show_header():
-    st.markdown(
-        """
-        <div class="orbit-title-container">
-            <!-- Rings -->
-            <div class="orbit-ring ring-1">
-                <div class="planet planet-1"></div>
-            </div>
-            <div class="orbit-ring ring-2">
-                <div class="planet planet-2"></div>
-            </div>
-            <div class="orbit-ring ring-3">
-                <div class="planet planet-3"></div>
-            </div>
-            <!-- Title -->
-            <h1 class="celestial-title">🌌 Celestial Ai</h1>
-        </div>
-        <div style='text-align:center;'>
-            <span class="title-pill">Advanced Exoplanet Detection • Kepler 10-Feature Model</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-show_header()
-
-# =========================
-# Sidebar: Model Controls
-# =========================
-with st.sidebar:
-    st.markdown(
-        """
-        <div style='text-align:center;padding:18px;background:rgba(255,255,255,0.05);
-                    border-radius:16px;margin-bottom:16px;border:1px solid rgba(0,255,255,0.25);'>
-            <h2 style='margin:0;font-size:1.45rem;'>🚀 Control Panel</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    with st.expander("🔧 Model Artifacts", expanded=True):
-        model_upload = st.file_uploader("Upload Pipeline (.joblib)", type=["joblib"], key="model")
-        encoder_upload = st.file_uploader("Upload Encoder (.joblib)", type=["joblib"], key="encoder")
-
-    pipeline = None
-    label_encoder = None
-
-    if model_upload and encoder_upload:
-        pipeline = load_model_safe(model_upload)
-        label_encoder = load_model_safe(encoder_upload)
-        if pipeline is not None and label_encoder is not None:
-            st.success("✅ Custom artifacts loaded (uploaded).")
-        else:
-            st.error("❌ Failed to load uploaded artifacts. Please re-upload valid files.")
-    else:
-        pipeline = load_model_safe("gb_pipeline.joblib")
-        label_encoder = load_model_safe("label_encoder.joblib")
-        if pipeline is not None and label_encoder is not None:
-            st.info("📁 Using local artifacts: gb_pipeline.joblib + label_encoder.joblib")
-        else:
-            st.warning("⚠️ Model artifacts not found. Upload valid .joblib files above to enable predictions/retraining.")
-
-    st.markdown("### 📊 System Status")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("Model", "✅ Ready" if (pipeline is not None and label_encoder is not None) else "❌ Missing")
-    with c2:
-        st.metric("Features", f"{len(SELECTED_FEATURES)} used", delta="Kepler 10-feature")
-
-# =========================
 # Tabs
 # =========================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Batch Analysis",
     "✨ Quick Classify",
-    "🧠 Pretrained & Retrain",
+    "🧠 Pretrained Model",
     "📈 Visualizations",
     "ℹ️ About",
 ])
 
 # -------------------------
-# Tab 1: Batch Analysis
+# Tab 1: Batch Analysis (Upload OR analyze 10 rows from bundled dataset)
 # -------------------------
 with tab1:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown(
-            """
+        st.markdown("""
             <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
                         border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
                 <h3 style='margin:0;'>🚀 Batch Exoplanet Analysis</h3>
                 <p style='color:#b2c5ff;margin-top:10px;'>
-                    Upload a CSV with the <b>10 Kepler features</b> — or click the blue button to analyze
-                    <b>10 random rows</b> from the <u>default dataset</u> bundled in the app.
+                    Upload a CSV with the <b>10 Kepler features</b>, or click the blue button to analyze
+                    <b>10 random rows</b> from the <u>default dataset</u> bundled with the app.
                 </p>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """, unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
-        "📁 Upload CSV Dataset (must include the 10 feature columns)",
-        type=["csv"],
-        key="batch_csv",
+        "📁 Upload CSV Dataset (must include the 10 feature columns)", type=["csv"], key="batch_csv",
     )
 
-    # internal df holder
     df = None
     used_source = None  # "uploaded" | "default"
 
-    # Try reading uploaded CSV
     if uploaded_file:
         try:
             df = pd.read_csv(uploaded_file, comment="#")
@@ -443,19 +409,17 @@ with tab1:
                 st.error("Model artifacts not loaded. Upload valid .joblib files in the sidebar.")
             else:
                 try:
-                    df_default = pd.read_csv(SAMPLE_CSV_PATH)
-                    df_default.columns = df_default.columns.str.strip()
+                    df_default = get_default_dataset()
                     if len(df_default) < 10:
-                        st.error("Default dataset has fewer than 10 rows.")
+                        st.error("Default dataset has fewer than 10 rows. Please bundle a larger CSV in /data.")
                     else:
                         df = df_default.sample(10, random_state=np.random.randint(0, 1_000_000)).reset_index(drop=True)
                         used_source = "default"
-                        # Run analysis immediately
                         with st.spinner("Analyzing 10 rows from the default dataset..."):
                             X = align_features_df(df)
                             preds = pipeline.predict(X)
                             probas = pipeline.predict_proba(X)
-                            labels = decode_labels(preds, label_encoder)
+                            labels = decode_labels(preds)
                             results = df.copy()
                             results["prediction"] = labels
                             results["confidence"] = (probas.max(axis=1) * 100).round(2)
@@ -472,11 +436,11 @@ with tab1:
                             st.session_state["results"] = results
                         st.success("✅ Analysis complete! Processed 10 rows from the default dataset.")
                 except Exception as e:
-                    st.error(f"Could not load the default dataset: {e}")
+                    st.error(f"Could not load the bundled dataset: {e}")
 
-    # If we have df (uploaded) and artifacts, allow a normal analysis run
+    # Regular "Run Analysis" if the user uploaded a CSV
     if df is not None and used_source == "uploaded":
-        with st.expander("📋 Dataset Preview (up to 10 rows)", expanded=True):
+        with st.expander("📋 Dataset Preview (first 10 rows)", expanded=True):
             st.dataframe(df.head(10), use_container_width=True)
 
         c1r, c2r, c3r = st.columns([1, 1, 1])
@@ -489,7 +453,7 @@ with tab1:
                         X = align_features_df(df)
                         preds = pipeline.predict(X)
                         probas = pipeline.predict_proba(X)
-                        labels = decode_labels(preds, label_encoder)
+                        labels = decode_labels(preds)
                         results = df.copy()
                         results["prediction"] = labels
                         results["confidence"] = (probas.max(axis=1) * 100).round(2)
@@ -550,155 +514,123 @@ with tab1:
         )
     elif pipeline is None or label_encoder is None:
         st.info("Upload model artifacts from the sidebar to enable analysis.")
+
 # -------------------------
-# Tab 2: Quick Classify (human-readable names, no defaults)
+# Tab 2: Quick Classify (human labels, no defaults; pipeline standardizes/encodes)
 # -------------------------
 with tab2:
-    st.markdown(
-        """
+    st.markdown("""
         <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
                     border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
             <h3 style='margin:0;'>✨ Quick Candidate Classification</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>Enter values for the trained 10 features. (No defaults.)</p>
+            <p style='color:#b2c5ff;margin-top:10px;'>Enter the 10 trained features (the model scales/encodes internally).</p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
-    # We'll use text inputs (placeholders) and then validate, so there are no default values.
-    colL, colR = st.columns(2)
-    with colL:
-        koi_score_txt = st.text_input("KOI Score (0–1)")
-        koi_model_snr_txt = st.text_input("Transit Model Signal-to-Noise Ratio")
-        koi_impact_txt = st.text_input("Impact Parameter (0–1.5)")
-        koi_duration_txt = st.text_input("Transit Duration (hours)")
-        koi_prad_txt = st.text_input("Planet Radius (Earth radii)")
-    with colR:
-        koi_period_txt = st.text_input("Orbital Period (days)")
-        koi_fpflag_nt_txt = st.text_input("Not Transit-like Flag (0 or 1)")
-        koi_fpflag_co_txt = st.text_input("Centroid Offset Flag (0 or 1)")
-        koi_fpflag_ss_txt = st.text_input("Significant Secondary Flag (0 or 1)")
-        koi_fpflag_ec_txt = st.text_input("Eclipsing Binary Flag (0 or 1)")
+    # Two columns: human-friendly names, no default values
+    colA, colB = st.columns(2)
 
-    def _parse_float(x, name):
-        try:
-            return float(x)
-        except Exception:
-            raise ValueError(f"'{name}' must be a number.")
+    with colA:
+        koi_score = st.number_input("KOI Score (0–1)", min_value=0.0, max_value=1.0, step=0.01)
+        koi_model_snr = st.number_input("Signal-to-Noise Ratio (SNR)", min_value=0.0, step=0.1)
+        koi_impact = st.number_input("Transit Impact Parameter (0–1.5)", min_value=0.0, max_value=1.5, step=0.01)
+        koi_duration = st.number_input("Transit Duration (hours)", min_value=0.0, step=0.1)
+        koi_prad = st.number_input("Planet Radius (Earth radii)", min_value=0.0, step=0.1)
 
-    def _parse_int01(x, name):
-        v = int(float(x))
-        if v not in (0, 1):
-            raise ValueError(f"'{name}' must be 0 or 1.")
-        return v
+    with colB:
+        koi_period = st.number_input("Orbital Period (days)", min_value=0.0, step=0.1)
+        koi_fpflag_nt = st.selectbox("Not Transit-like (0/1)", [0, 1], index=0, help="0 = transit-like OK; 1 = not transit-like")
+        koi_fpflag_co = st.selectbox("Centroid Offset Flag (0/1)", [0, 1], index=0)
+        koi_fpflag_ss = st.selectbox("Significant Secondary Flag (0/1)", [0, 1], index=0)
+        koi_fpflag_ec = st.selectbox("Eclipsing Binary Flag (0/1)", [0, 1], index=0)
 
-    c1b, c2b, c3b = st.columns([1, 2, 1])
-    with c2b:
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
         if st.button("🔮 Classify Candidate", use_container_width=True, type="primary"):
             if pipeline is None or label_encoder is None:
                 st.error("Model not loaded. Upload valid artifacts in the sidebar.")
             else:
-                try:
-                    row = {
-                        "koi_score": _parse_float(koi_score_txt, "KOI Score"),
-                        "koi_fpflag_nt": _parse_int01(koi_fpflag_nt_txt, "Not Transit-like Flag"),
-                        "koi_model_snr": _parse_float(koi_model_snr_txt, "Transit Model SNR"),
-                        "koi_fpflag_co": _parse_int01(koi_fpflag_co_txt, "Centroid Offset Flag"),
-                        "koi_fpflag_ss": _parse_int01(koi_fpflag_ss_txt, "Significant Secondary Flag"),
-                        "koi_fpflag_ec": _parse_int01(koi_fpflag_ec_txt, "Eclipsing Binary Flag"),
-                        "koi_impact": _parse_float(koi_impact_txt, "Impact Parameter"),
-                        "koi_duration": _parse_float(koi_duration_txt, "Transit Duration"),
-                        "koi_prad": _parse_float(koi_prad_txt, "Planet Radius"),
-                        "koi_period": _parse_float(koi_period_txt, "Orbital Period"),
-                    }
-                except ValueError as ve:
-                    st.error(str(ve))
-                    st.stop()
-
                 with st.spinner("Analyzing candidate..."):
-                    progress_bar = st.progress(0)
-                    X = align_features_df(pd.DataFrame([row]))
-                    progress_bar.progress(40)
+                    row = pd.DataFrame([{
+                        "koi_score": koi_score,
+                        "koi_fpflag_nt": koi_fpflag_nt,
+                        "koi_model_snr": koi_model_snr,
+                        "koi_fpflag_co": koi_fpflag_co,
+                        "koi_fpflag_ss": koi_fpflag_ss,
+                        "koi_fpflag_ec": koi_fpflag_ec,
+                        "koi_impact": koi_impact,
+                        "koi_duration": koi_duration,
+                        "koi_prad": koi_prad,
+                        "koi_period": koi_period,
+                    }])
+                    X = align_features_df(row)
                     pred = pipeline.predict(X)[0]
                     proba = pipeline.predict_proba(X)[0]
-                    label = decode_labels(np.array([pred]), label_encoder)[0]
+                    label = decode_labels(np.array([pred]))[0]
                     confidence = float(proba.max() * 100)
-                    progress_bar.progress(100)
-                    time.sleep(0.1)
 
-                if label == "CONFIRMED":
-                    st.balloons()
-                    color_block = ("rgba(0,255,0,0.1)", "rgba(0,255,255,0.55)")
-                    title = "🌟 EXOPLANET CONFIRMED!"
-                    sub = "This candidate shows strong signs of being a real exoplanet."
-                elif label == "CANDIDATE":
-                    color_block = ("rgba(255,255,0,0.12)", "rgba(255,255,0,0.55)")
-                    title = "🔍 CANDIDATE"
-                    sub = "Further observation needed to confirm."
-                else:
-                    color_block = ("rgba(255,0,0,0.12)", "rgba(255,0,0,0.55)")
-                    title = "🚫 FALSE POSITIVE"
-                    sub = "This signal is likely not from a real exoplanet."
+                    if label == "CONFIRMED":
+                        st.balloons()
+                        color_block = ("rgba(0,255,0,0.1)", "rgba(0,255,255,0.5)")
+                        title = "🌟 EXOPLANET CONFIRMED!"
+                        sub = "This candidate shows strong signs of being a real exoplanet."
+                    elif label == "CANDIDATE":
+                        color_block = ("rgba(255,255,0,0.1)", "rgba(255,255,0,0.5)")
+                        title = "🔍 CANDIDATE"
+                        sub = "Further observation needed to confirm."
+                    else:
+                        color_block = ("rgba(255,0,0,0.1)", "rgba(255,0,0,0.5)")
+                        title = "🚫 FALSE POSITIVE"
+                        sub = "This signal is likely not from a real exoplanet."
 
-                st.markdown(
-                    f"""
-                    <div style='text-align:center;padding:28px;background:linear-gradient(135deg,{color_block[0]},{color_block[0]});
-                                border-radius:18px;border:2px solid {color_block[1]};'>
-                        <h1 style='margin:0;'>{title}</h1>
-                        <h2>Confidence: {confidence:.1f}%</h2>
-                        <p style='color:#cfe3ff;'>{sub}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    st.markdown(f"""
+                        <div style='text-align:center;padding:30px;background:linear-gradient(135deg,{color_block[0]},{color_block[0]});
+                                    border-radius:20px;border:2px solid {color_block[1]};'>
+                            <h2 style='margin:0;'>{title}</h2>
+                            <h3>Confidence: {confidence:.1f}%</h3>
+                            <p style='color:#cfe3ff;'>{sub}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
 
-                st.markdown("### 📊 Probability Distribution")
-                classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]))
-                fig = go.Figure(
-                    data=[go.Bar(
+                    st.markdown("### 📊 Probability Distribution")
+                    classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]))
+                    fig = go.Figure(data=[go.Bar(
                         x=classes,
                         y=(proba * 100).round(2),
                         text=[f"{p*100:.1f}%" for p in proba],
-                        textposition="auto",
-                    )]
-                )
-                fig.update_layout(
-                    title="Classification Probabilities",
-                    xaxis_title="Class",
-                    yaxis_title="Probability (%)",
-                    template="plotly_dark",
-                    height=400,
-                    showlegend=False,
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                        textposition="auto"
+                    )])
+                    fig.update_layout(
+                        title="Classification Probabilities",
+                        xaxis_title="Class",
+                        yaxis_title="Probability (%)",
+                        template="plotly_dark",
+                        height=400,
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------
-# Tab 3: Pretrained & Retrain (user can upload CSV to retrain)
+# Tab 3: Pretrained Model (allow retrain from CSV)
 # -------------------------
 with tab3:
-    st.markdown(
-        """
+    st.markdown("""
         <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
                     border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
-            <h3 style='margin:0;'>🧠 Pretrained & Retrain</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>Optionally upload a labeled CSV (with <code>koi_disposition</code>) to retrain the model.</p>
+            <h3 style='margin:0;'>🧠 Pretrained Model</h3>
+            <p style='color:#b2c5ff;margin-top:10px;'>
+                Upload a CSV with the 10 features <b>+ 'koi_disposition'</b> to retrain and export a new pipeline & encoder.
+            </p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
-    train_file = st.file_uploader(
-        "Upload Training Dataset (CSV with 10 features + 'koi_disposition')",
-        type=["csv"],
-        key="training_file",
-    )
-
+    train_file = st.file_uploader("📥 Upload Training Dataset (CSV with 10 features + koi_disposition)", type=["csv"], key="training_file")
     if train_file is not None:
         try:
             train_df = pd.read_csv(train_file, comment="#")
             train_df.columns = train_df.columns.str.strip()
             st.success(f"✅ Loaded {len(train_df)} training samples")
-            with st.expander("📋 Training Data Preview"):
+            with st.expander("📋 Training Data Preview", expanded=False):
                 st.dataframe(train_df.head(), use_container_width=True)
 
             colA, colB = st.columns(2)
@@ -708,17 +640,10 @@ with tab3:
                 max_iter = st.number_input("Max Iterations", 50, 1000, 500, step=50)
 
             if st.button("🚀 Retrain Model", type="primary"):
-                if "koi_disposition" not in train_df.columns:
-                    st.error("Training CSV must include 'koi_disposition'.")
-                else:
-                    with st.spinner("Retraining model..."):
-                        from sklearn.model_selection import train_test_split
-                        from sklearn.preprocessing import StandardScaler
-                        from sklearn.ensemble import HistGradientBoostingClassifier
-                        from sklearn.compose import ColumnTransformer
-                        from sklearn.pipeline import Pipeline
-                        from sklearn.impute import SimpleImputer
-
+                with st.spinner("Training model..."):
+                    if "koi_disposition" not in train_df.columns:
+                        st.error("Training CSV must include 'koi_disposition'.")
+                    else:
                         train_le = LabelEncoder()
                         y = train_le.fit_transform(train_df["koi_disposition"].astype(str))
 
@@ -752,175 +677,156 @@ with tab3:
                             random_state=42,
                         )
                         new_pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", clf)])
-
-                        Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=42, stratify=y)
+                        Xtr, Xte, ytr, yte = train_test_split(
+                            X, y, test_size=test_size, random_state=42, stratify=y
+                        )
                         new_pipeline.fit(Xtr, ytr)
                         acc = new_pipeline.score(Xte, yte)
-
                         joblib.dump(new_pipeline, "gb_pipeline.joblib")
                         joblib.dump(train_le, "label_encoder.joblib")
                         st.success(f"✅ Retraining complete. Test accuracy: {acc:.2%}")
-
-                        c1d, c2d = st.columns(2)
-                        with c1d:
+                        c1, c2 = st.columns(2)
+                        with c1:
                             with open("gb_pipeline.joblib", "rb") as f:
-                                st.download_button("📥 Download Pipeline", f.read(), "gb_pipeline.joblib", use_container_width=True)
-                        with c2d:
+                                st.download_button("📥 Download Pipeline", f.read(), "gb_pipeline.joblib")
+                        with c2:
                             with open("label_encoder.joblib", "rb") as f:
-                                st.download_button("📥 Download Encoder", f.read(), "label_encoder.joblib", use_container_width=True)
+                                st.download_button("📥 Download Encoder", f.read(), "label_encoder.joblib")
         except Exception as e:
-            st.error(f"Error during retraining: {e}")
+            st.error(f"Error during training: {e}")
     else:
-        st.info("Upload a labeled CSV to retrain the model. (Your current artifacts are used for predictions.)")
+        st.info("Upload training data to (re)train a compatible 10-feature model.")
 
 # -------------------------
-# Tab 4: Visualizations (show everything together, no selection)
+# Tab 4: Visualizations (no selection; show all plots together)
 # -------------------------
 with tab4:
-    st.markdown(
-        """
+    st.markdown("""
         <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
                     border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
             <h3 style='margin:0;'>📈 Data Visualizations</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>All plots displayed together (Distribution, Confidence, Correlations, Radius vs Period, 3D Explorer).</p>
+            <p style='color:#b2c5ff;margin-top:10px;'>All visualizations render automatically from current results; if none, they use the bundled dataset.</p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
+    # Determine the dataset to visualize: results -> bundled dataset predictions
     if "results" in st.session_state:
-        results = st.session_state["results"].copy()
+        viz_df = st.session_state["results"].copy()
+    else:
+        try:
+            # Compute predictions for the whole bundled dataset (no random)
+            base_df = get_default_dataset().copy()
+            Xv = align_features_df(base_df)
+            if pipeline is not None and label_encoder is not None:
+                yhat = pipeline.predict(Xv)
+                yproba = pipeline.predict_proba(Xv)
+                viz_df = base_df.copy()
+                viz_df["prediction"] = decode_labels(yhat)
+                viz_df["confidence"] = (yproba.max(axis=1) * 100).round(2)
+            else:
+                viz_df = base_df.copy()
+                viz_df["prediction"] = viz_df.get("koi_disposition", "CANDIDATE")
+                viz_df["confidence"] = 50.0
+        except Exception as e:
+            st.error(f"Could not prepare data for visualizations: {e}")
+            viz_df = None
 
-        # 1) Distribution (pie) and Confidence (hist)
-        c_top1, c_top2 = st.columns(2)
-        with c_top1:
-            vc = results["prediction"].value_counts()
-            if len(vc) > 0:
-                fig = px.pie(
-                    values=vc.values, names=vc.index, title="Classification Distribution",
-                    color_discrete_sequence=['#6ea8fe', '#e599f7', '#63e6be']
+    if viz_df is not None and len(viz_df) > 0:
+        # Row 1: distribution + confidence histogram
+        cA, cB = st.columns(2)
+        with cA:
+            vc = viz_df["prediction"].value_counts()
+            fig = px.pie(values=vc.values, names=vc.index, title="Classification Distribution")
+            fig.update_traces(textposition="inside", textinfo="percent+label")
+            fig.update_layout(template="plotly_dark", height=420)
+            st.plotly_chart(fig, use_container_width=True)
+        with cB:
+            fig = px.histogram(viz_df, x="confidence", nbins=24, title="Confidence Distribution")
+            fig.update_layout(template="plotly_dark", height=420)
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Row 2: 2D scatter (Radius vs Period)
+        cC, cD = st.columns(2)
+        with cC:
+            if all(c in viz_df.columns for c in ["koi_period", "koi_prad"]):
+                fig = px.scatter(
+                    viz_df, x="koi_period", y="koi_prad", color="prediction", size="confidence",
+                    title="Radius vs Period (confidence-scaled)"
                 )
-                fig.update_traces(textposition="inside", textinfo="percent+label")
-                fig.update_layout(template="plotly_dark", height=420)
+                fig.update_layout(template="plotly_dark", height=500)
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("No predictions to visualize yet.")
-        with c_top2:
-            if "confidence" in results.columns:
-                fig = px.histogram(results, x="confidence", nbins=20, title="Confidence Distribution")
-                fig.update_layout(template="plotly_dark", height=420)
+                st.warning("Missing columns for Radius vs Period plot.")
+
+        with cD:
+            # Correlation heatmap for numeric features
+            num_cols = [c for c in SELECTED_FEATURES if c in viz_df.columns]
+            if len(num_cols) >= 3:
+                corr = viz_df[num_cols].corr()
+                fig = px.imshow(corr, title="Feature Correlation Heatmap", color_continuous_scale='Viridis')
+                fig.update_layout(template="plotly_dark", height=500)
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Confidence column not found.")
+                st.warning("Not enough numeric features for correlation heatmap.")
 
-        # 2) Correlation heatmap
-        st.markdown("### 🔬 Feature Correlations")
-        numeric_cols = [c for c in SELECTED_FEATURES if c in results.columns]
-        if len(numeric_cols) >= 3:
-            corr = results[numeric_cols].corr()
-            fig_heat = px.imshow(corr, title="Feature Correlation Heatmap", color_continuous_scale="Viridis")
-            fig_heat.update_layout(template="plotly_dark", height=520)
-            st.plotly_chart(fig_heat, use_container_width=True)
-        else:
-            st.info("Not enough numeric features available for correlation heatmap.")
-
-        # 3) Radius vs Period scatter
-        st.markdown("### 🪐 Radius vs Period (confidence-scaled)")
-        if all(col in results.columns for col in ["koi_prad", "koi_period"]):
-            fig_scatter = px.scatter(
-                results,
-                x="koi_period",
-                y="koi_prad",
-                color="prediction",
-                size="confidence" if "confidence" in results.columns else None,
-                title="Radius vs Period",
-            )
-            fig_scatter.update_layout(template="plotly_dark", height=520)
-            st.plotly_chart(fig_scatter, use_container_width=True)
-        else:
-            st.info("Required features missing: koi_period & koi_prad")
-
-        # 4) 3D Explorer: SNR vs Radius vs Period
-        st.markdown("### 🌌 3D Explorer: SNR vs Radius vs Period")
-        need3d = ["koi_model_snr", "koi_prad", "koi_period"]
-        if all(c in results.columns for c in need3d):
+        # Row 3: 3D explorer if columns exist
+        if all(c in viz_df.columns for c in ["koi_model_snr", "koi_prad", "koi_period"]):
             fig3d = px.scatter_3d(
-                results,
-                x="koi_model_snr",
-                y="koi_prad",
-                z="koi_period",
-                color="prediction",
-                size="confidence" if "confidence" in results.columns else None,
-                title="3D Explorer",
+                viz_df, x="koi_model_snr", y="koi_prad", z="koi_period",
+                color="prediction", size="confidence", title="3D Explorer: SNR vs Radius vs Period"
             )
-            fig3d.update_layout(template="plotly_dark", height=720)
+            fig3d.update_layout(template="plotly_dark", height=700)
             st.plotly_chart(fig3d, use_container_width=True)
         else:
-            st.info("Need koi_model_snr, koi_prad, koi_period for 3D view.")
+            st.info("3D Explorer requires koi_model_snr, koi_prad, koi_period.")
     else:
-        st.info("📊 Run an analysis in the Batch Analysis tab to populate visualizations.")
+        st.info("No data available to visualize yet.")
 
 # -------------------------
 # Tab 5: About
 # -------------------------
 with tab5:
-    st.markdown(
-        """
-        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
-                    border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
+    st.markdown("""
+        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);border-radius:15px;margin-bottom:24px;'>
             <h3 style='margin:0;'>ℹ️ About Celestial Ai</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler 10-feature model edition</p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
-    colA, colB = st.columns([2, 1])
-    with colA:
-        st.markdown(
-            """
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("""
             ### 🌌 Project Overview
-            Celestial Ai integrates a trained Kepler pipeline that uses exactly 10 features:
+            This build integrates your trained Kepler pipeline that uses exactly 10 features:
             `koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period`.
-            It supports batch analysis, single-candidate classification, optional retraining, and rich interactive visuals.
-            """
-        )
-    with colB:
-        st.markdown(
-            """
+            It supports batch analysis, single-candidate classification, optional retraining, and interactive visuals—no random data.
+        """)
+    with col2:
+        st.markdown("""
             ### 🏆 Highlights
             - Exact feature alignment to your model  
-            - No synthetic demo generation for analysis  
-            - Neon-blue/purple themed UI with animations  
-            - Visuals include 3D explorer & correlations
-            """
-        )
+            - Bundled default dataset for first-time users  
+            - Clean UI with metrics & downloads  
+            - Plotly visuals & 3D explorer
+        """)
 
     st.markdown("---")
-    st.markdown(
-        """
-        <div style='text-align:center;padding:16px;background:rgba(255,255,255,0.05);border-radius:14px;'>
-            <h4 style='color:#77e1ff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
-            <p style='color:#b2c5ff;'>Exploring new worlds through AI</p>
+    st.markdown("""
+        <div style='text-align:center;padding:18px;background:rgba(255,255,255,0.05);border-radius:15px;'>
+            <h4 style='color:#00ffff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
+            <p style='color:#9bb3ff;'>Exploring new worlds through AI</p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
 # =========================
 # Footer
 # =========================
-st.markdown(
-    """
-    <div style='text-align:center;margin-top:36px;padding:16px;border-top:1px solid rgba(255,255,255,0.12);'>
-        <p style='color:#9ab3ff;font-size:0.95rem;'>
-            Celestial Ai • NASA Space Apps 2025 •
-            <span style='color:#71e3ff;'>Kepler 10-Feature Pipeline</span>
+st.markdown("""
+    <div style='text-align:center;margin-top:38px;padding:18px;border-top:1px solid rgba(255,255,255,0.1);'>
+        <p style='color:#8fa1ff;font-size:0.95rem;'>
+            Celestial Ai • NASA Space Apps 2025 • <span style='color:#7c3aed;'>Kepler 10-Feature Pipeline</span>
         </p>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
-
+""", unsafe_allow_html=True)
 
 
