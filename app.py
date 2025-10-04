@@ -90,7 +90,7 @@ def get_default_dataset() -> pd.DataFrame:
     return df
 
 # =========================
-# Enhanced CSS (GLOBAL stars + BACKGROUND orbits + NAMESPACED TITLE orbits)
+# Enhanced CSS — space theme + BACKGROUND orbital layer (blur under content)
 # =========================
 def inject_custom_css():
     st.markdown("""
@@ -109,7 +109,7 @@ def inject_custom_css():
             100%{background-position:0% 50%}
         }
 
-        /* Parallax star layers (global) */
+        /* Parallax star layers (z-index: 0) */
         .stars, .stars2, .stars3 {
             position:fixed; top:0; left:0; width:100%; height:100%;
             pointer-events:none; z-index:0;
@@ -144,69 +144,63 @@ def inject_custom_css():
         @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
         @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
         @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
-        @keyframes twinkle { 0%,100% {opacity: 0.25;} 50% {opacity: .55;} }
 
-        .main .block-container { position:relative; z-index: 2; padding-top: 2rem; }
-
-        /* ======= GLOBAL BACKGROUND ORBITS (keep if you use them elsewhere) ======= */
+        /* BACKGROUND orbital layer (z-index:1) — planets rotate behind everything.
+           They will appear blurred beneath cards due to containers' backdrop-filter. */
         .orbital-bg {
             position: fixed; inset: 0;
             display:flex; align-items:center; justify-content:center;
             pointer-events: none; z-index: 1;
         }
-        .orbital-bg .orbit {
+        .orbit {
             position: absolute;
             border-radius: 50%;
             border: 1px dashed rgba(100, 100, 255, 0.20);
             filter: drop-shadow(0 0 6px rgba(0,255,255,0.25));
         }
-        .orbital-bg .o1 { width: 680px; height: 680px; animation: orbitRotate 24s linear infinite; }
-        .orbital-bg .o2 { width: 920px; height: 920px; animation: orbitRotate 36s linear infinite reverse; }
-        .orbital-bg .o3 { width: 1180px; height: 1180px; animation: orbitRotate 48s linear infinite; }
-        .orbital-bg .planet {
-            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-            border-radius: 50%; box-shadow: 0 0 20px rgba(0,200,255,0.35);
-        }
-        .orbital-bg .p1 { width: 24px; height: 24px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
-        .orbital-bg .p2 { width: 32px; height: 32px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); }
-        .orbital-bg .p3 { width: 18px; height: 18px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); }
+        .o1 { width: 680px; height: 680px; animation: orbitRotate 24s linear infinite; }
+        .o2 { width: 920px; height: 920px; animation: orbitRotate 36s linear infinite reverse; }
+        .o3 { width: 1180px; height: 1180px; animation: orbitRotate 48s linear infinite; }
         @keyframes orbitRotate { from {transform: rotate(0deg);} to {transform: rotate(360deg);} }
 
-        /* ======= TITLE-ONLY ORBITS (namespaced so they never clash) ======= */
-        .title-wrap { position: relative; display: inline-block; padding: 30px 60px; }
-        .title-wrap h1 { position: relative; z-index: 3; }
+        .planet {
+            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0,200,255,0.35);
+        }
+        .p1 { width: 24px; height: 24px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
+        .p2 { width: 32px; height: 32px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); }
+        .p3 { width: 18px; height: 18px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); }
 
-        .title-wrap .t-orbit {
+        .main .block-container { position:relative; z-index: 2; padding-top: 2rem; }
+
+        /* Content styling (these add the blur of background orbits when intersecting) */
+        .glass, .stTabs [data-baseweb="tab-list"], [data-testid="metric-container"],
+        .stAlert, [data-testid="stFileUploadDropzone"] {
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            backdrop-filter: blur(6px) saturate(120%);
+        }
+
+        /* === Header orbiting planets around the title (restored) === */
+        .title-wrap { position: relative; display: inline-block; padding: 30px 60px; }
+        .title-wrap .orbit {
             position: absolute;
             top: 50%; left: 50%;
-            /* keep the ring centered while rotating */
             transform: translate(-50%, -50%);
             border-radius: 50%;
             border: 1px dashed rgba(100, 100, 255, 0.25);
             pointer-events: none;
-            z-index: 2;
+            filter: none;
         }
-        .title-wrap .t-o1 { width: 380px; height: 380px; animation: tOrbit 24s linear infinite; }
-        .title-wrap .t-o2 { width: 540px; height: 540px; animation: tOrbit 36s linear infinite reverse; }
-        .title-wrap .t-o3 { width: 700px; height: 700px; animation: tOrbit 48s linear infinite; }
+        .title-wrap .o1 { width: 380px; height: 380px; animation: orbitRotate 24s linear infinite; }
+        .title-wrap .o2 { width: 540px; height: 540px; animation: orbitRotate 36s linear infinite reverse; }
+        .title-wrap .o3 { width: 700px; height: 700px; animation: orbitRotate 48s linear infinite; }
+        .title-wrap .planet { box-shadow: 0 0 20px rgba(0,200,255,0.4); }
+        .title-wrap .p1 { width: 26px; height: 26px; top:-13px; left:50%; transform:translateX(-50%); }
+        .title-wrap .p2 { width: 34px; height: 34px; top:-17px; left:50%; transform:translateX(-50%); }
+        .title-wrap .p3 { width: 18px; height: 18px; top:-9px;  left:50%; transform:translateX(-50%); }
 
-        @keyframes tOrbit {
-            0%   { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-
-        .title-wrap .t-planet {
-            position: absolute;
-            top: -12px; left: 50%;
-            transform: translateX(-50%);
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(0,200,255,0.40);
-        }
-        .title-wrap .t-p1 { width: 24px; height: 24px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
-        .title-wrap .t-p2 { width: 32px; height: 32px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); }
-        .title-wrap .t-p3 { width: 18px; height: 18px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); }
-
-        /* Headings */
         h1 {
             font-family:'Orbitron', monospace !important; font-weight:900 !important;
             background: linear-gradient(120deg, #00ffff, #ff00ff, #8b5cf6, #00ffff);
@@ -217,15 +211,65 @@ def inject_custom_css():
         }
         @keyframes shine { to { background-position: 200% center; } }
 
-        /* Glassy elements (optional — keep your existing styles if you like) */
-        .glass {
-            background: rgba(255,255,255,0.05) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
-            backdrop-filter: blur(6px) saturate(120%);
-            border-radius: 15px;
+        h2,h3 { font-family:'Space Grotesk', sans-serif !important; color:#b9c4ff !important; text-shadow:0 0 15px rgba(100,100,255,0.35); }
+
+        .stTabs [data-baseweb="tab-list"] {
+            border-radius:15px; padding:10px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            width: 100%;
+        }
+        .stTabs [data-baseweb="tab"] {
+            color:#8ab4ff !important; font-family:'Space Grotesk', sans-serif !important; font-weight:700;
+            transition: all .3s ease; flex-grow: 1; justify-content: center;
+        }
+        .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color:#7c3aed !important; }
+        .stTabs [aria-selected="true"] {
+            background: linear-gradient(90deg, rgba(0,255,255,0.18), rgba(139,92,246,0.25));
+            border-radius:10px; box-shadow: 0 4px 20px rgba(0,255,255,0.28);
         }
 
-        /* Force labels bluish */
+        .stTextInput input, .stNumberInput input, .stSelectbox select, .stSlider label {
+            background: rgba(255,255,255,0.05) !important; border: 2px solid rgba(0,255,255,0.3) !important;
+            color:#e6e6ff !important; border-radius:10px !important; backdrop-filter: blur(5px);
+            transition: all .3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .stTextInput input:focus, .stNumberInput input:focus {
+            border-color:#7c3aed !important; box-shadow:0 0 30px rgba(124,58,237,0.45), inset 0 2px 4px rgba(0,0,0,0.2) !important;
+            transform: scale(1.02);
+        }
+
+        .stButton > button {
+            background: linear-gradient(135deg, #667eea 0%, #7c3aed 100%); color:#f1f1ff; border:none;
+            padding:12px 35px; border-radius:30px; font-weight:800; font-family:'Space Grotesk', sans-serif;
+            transition: all .25s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 6px 20px rgba(102,126,234,0.4);
+            position: relative; overflow: hidden;
+        }
+        .stButton > button:hover { transform: translateY(-2px) scale(1.02); box-shadow:0 10px 35px rgba(124,58,237,0.5); }
+
+        .stAlert { border-radius:15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+
+        [data-testid="metric-container"] {
+            padding:20px; border-radius:15px;
+            box-shadow:0 6px 25px rgba(0,0,0,0.3); transition: all 0.25s ease; position: relative; overflow: hidden;
+        }
+        [data-testid="metric-container"]:hover {
+            transform: translateY(-3px) scale(1.01);
+            border-color: rgba(124,58,237,0.35);
+            box-shadow:0 10px 40px rgba(124,58,237,0.35);
+        }
+
+        [data-testid="stFileUploadDropzone"] {
+            border:3px dashed rgba(124,58,237,0.35);
+            border-radius:20px; transition: all 0.25s ease;
+        }
+        [data-testid="stFileUploadDropzone"]:hover { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.6); transform: scale(1.01); }
+
+        ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #7c3aed); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
+
+        .streamlit-expanderHeader { background: rgba(255,255,255,0.07) !important; border-radius:10px !important; color:#a8b4ff !important; }
+        .streamlit-expanderHeader:hover { background: rgba(124,58,237,0.1) !important; }
+
+        /* Force all labels into blue/purple */
         label, .stMarkdown p label, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stRadio label, .stCheckbox label {
             color: #8ab4ff !important;
         }
@@ -235,13 +279,12 @@ def inject_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-    # Global stars and optional global background orbital layer
+    # Parallax stars + GLOBAL orbital background layer (behind all content)
     st.markdown("""
     <div class="stars"></div>
     <div class="stars2"></div>
     <div class="stars3"></div>
 
-    <!-- Keep this only if you want the large background orbits behind the whole app -->
     <div class="orbital-bg">
         <div class="orbit o3"><div class="planet p3"></div></div>
         <div class="orbit o2"><div class="planet p2"></div></div>
@@ -249,16 +292,18 @@ def inject_custom_css():
     </div>
     """, unsafe_allow_html=True)
 
+inject_custom_css()
+
 # =========================
-# Header (title WITH namespaced spinning planets)
+# Header (title WITH spinning planets around it)
 # =========================
 def show_header():
     st.markdown("""
         <div style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
             <div class="title-wrap">
-                <div class="t-orbit t-o3"><div class="t-planet t-p3"></div></div>
-                <div class="t-orbit t-o2"><div class="t-planet t-p2"></div></div>
-                <div class="t-orbit t-o1"><div class="t-planet t-p1"></div></div>
+                <div class="orbit o3"><div class="planet p3"></div></div>
+                <div class="orbit o2"><div class="planet p2"></div></div>
+                <div class="orbit o1"><div class="planet p1"></div></div>
                 <h1>🌌 Celestial Ai</h1>
             </div>
         </div>
@@ -266,16 +311,14 @@ def show_header():
             Advanced Exoplanet Detection System • NASA Space Apps 2025
         </p>
         <div style='text-align:center;margin:16px 0;'>
-            <span class='glass' style='display:inline-block;padding:8px 18px;border-radius:22px;color:#fff;font-size:.95rem;font-family:Space Grotesk;
-                                       background:linear-gradient(90deg,#667eea,#7c3aed);box-shadow:0 6px 20px rgba(102,126,234,0.35);'>
+            <span class='glass' style='display:inline-block;background:linear-gradient(90deg,#667eea,#7c3aed);padding:8px 18px;border-radius:22px;color:#fff;font-size:.95rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(102,126,234,0.35);'>
                 ✨ Powered by a Kepler 10-Feature Model
             </span>
         </div>
     """, unsafe_allow_html=True)
 
-# Call them where you already do:
-inject_custom_css()
 show_header()
+
 # =========================
 # Sidebar: Model Controls
 # =========================
@@ -1046,4 +1089,5 @@ st.markdown("""
         </p>
     </div>
 """, unsafe_allow_html=True)
+
 
