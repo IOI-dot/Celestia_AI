@@ -1,15 +1,12 @@
 # Celestial Ai (Kepler 10-feature edition) — Streamlit app
 # Integrates trained pipeline: gb_pipeline.joblib + label_encoder.joblib
-# Discord-style UI, NO RANDOM DATA in analytics, batch + single classify, retrain, visuals
-# Upgrades:
-# - Orbiting planets moved to a global BACKGROUND layer with blur-through via backdrop-filter
-# - Tab 3 renamed to "🧠 Pretrain Model"
-# - New Tab 6 game "🕹️ Guess the Class" between Visualizations and About
+# Beautiful UI with Discord-style effects, NO RANDOM DATA, batch + single classify, retrain, and all-in-one visuals
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import time
 import warnings
 import plotly.express as px
 import plotly.graph_objects as go
@@ -21,6 +18,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import HistGradientBoostingClassifier
+import streamlit.components.v1 as components
 from pathlib import Path
 import base64
 
@@ -52,7 +50,7 @@ SELECTED_FEATURES = [
     "koi_period",
 ]
 
-APP_DIR = Path(__file__).parent if "__file__" in globals() else Path(".")
+APP_DIR = Path(__file__).parent
 DATA_DIR = APP_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -93,7 +91,7 @@ def get_default_dataset() -> pd.DataFrame:
     return df
 
 # =========================
-# Enhanced CSS: GLOBAL orbits background + blur-through
+# Enhanced CSS with Discord-style animations + orbiting planets + blue/purple labels
 # =========================
 def inject_custom_css():
     st.markdown("""
@@ -107,13 +105,14 @@ def inject_custom_css():
             overflow-x: hidden;
         }
         @keyframes gradientShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
-
-        /* Star layers (z=0) */
-        .stars, .stars2, .stars3 {
-            position:fixed; top:0; left:0; width:100%; height:100%;
-            pointer-events:none; z-index:0;
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.5; }
         }
-        @keyframes twinkle { 0%,100%{opacity:.1} 50%{opacity:.5} }
+
+        /* Parallax star layers */
+        .stars, .stars2, .stars3 { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; }
         .stars{
             background-image:
                 radial-gradient(2px 2px at 20px 30px, white, transparent),
@@ -145,59 +144,53 @@ def inject_custom_css():
         @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
         @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
 
-        .main .block-container { position:relative; z-index:3; padding-top:2rem; }
+        .main .block-container { position:relative; z-index:10; padding-top:2rem; }
 
-        /* GLOBAL orbits background (z=1), behind UI (z=3) so it blurs under .glass */
-        .orbits-bg {
-            position: fixed; inset: 0;
-            display:flex; justify-content:center; align-items:flex-start;
-            pointer-events: none;
-            z-index:1;
-        }
-        .orbits-wrap { position: relative; margin-top: 40px; width: 900px; height: 900px; }
+        /* Animated title + orbiting planets wrapper */
+        .title-wrap { position: relative; display: inline-block; padding: 30px 60px; }
         .orbit {
-            position: absolute; top: 50%; left: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             border-radius: 50%;
-            border: 1px dashed rgba(100, 100, 255, 0.18);
+            border: 1px dashed rgba(100, 100, 255, 0.25);
+            pointer-events: none;
         }
-        .orbit.o1 { width: 420px; height: 420px; animation: orbitRotate 24s linear infinite; }
-        .orbit.o2 { width: 620px; height: 620px; animation: orbitRotate 36s linear infinite reverse; }
-        .orbit.o3 { width: 820px; height: 820px; animation: orbitRotate 48s linear infinite; }
+        .orbit.o1 { width: 380px; height: 380px; animation: orbitRotate 24s linear infinite; }
+        .orbit.o2 { width: 540px; height: 540px; animation: orbitRotate 36s linear infinite reverse; }
+        .orbit.o3 { width: 700px; height: 700px; animation: orbitRotate 48s linear infinite; }
         @keyframes orbitRotate { 0% { transform: translate(-50%, -50%) rotate(0deg);} 100% { transform: translate(-50%, -50%) rotate(360deg);} }
 
-        .planet { position: absolute; border-radius: 50%; box-shadow: 0 0 20px rgba(0,200,255,0.35); }
-        .p1 { width: 28px; height: 28px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); top: -14px; left: 50%; transform: translateX(-50%); }
-        .p2 { width: 36px; height: 36px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); top: -18px; left: 50%; transform: translateX(-50%); }
-        .p3 { width: 20px; height: 20px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); top: -10px; left: 50%; transform: translateX(-50%); }
-
-        /* Glass foreground for blur-through */
-        .glass, .stAlert, [data-testid="metric-container"], .stTabs [data-baseweb="tab-list"],
-        [data-testid="stFileUploadDropzone"], .stDataFrame, .stCheckbox, .stRadio, .stSelectbox, .stNumberInput, .stTextInput {
-            backdrop-filter: blur(6px) saturate(120%);
-            -webkit-backdrop-filter: blur(6px) saturate(120%);
+        .planet {
+            position: absolute; border-radius: 50%; box-shadow: 0 0 20px rgba(0,200,255,0.4);
         }
+        .p1 { width: 26px; height: 26px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); top: -13px; left: 50%; transform: translateX(-50%); }
+        .p2 { width: 34px; height: 34px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); top: -17px; left: 50%; transform: translateX(-50%); }
+        .p3 { width: 18px; height: 18px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); top: -9px; left: 50%; transform: translateX(-50%); }
 
-        /* Typography & UI */
         h1 {
             font-family:'Orbitron', monospace !important; font-weight:900 !important;
             background: linear-gradient(120deg, #00ffff, #ff00ff, #8b5cf6, #00ffff);
             background-size:200% auto; background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-            animation: shine 3s linear infinite; text-align:center; font-size:3.6rem !important; margin:0 !important;
+            animation: shine 3s linear infinite;
+            text-align:center; font-size:3.6rem !important; margin:0 !important;
             text-shadow:0 0 40px rgba(0,255,255,0.6);
-            position: relative; z-index: 4;
         }
         @keyframes shine { to { background-position: 200% center; } }
 
         h2,h3 { font-family:'Space Grotesk', sans-serif !important; color:#b9c4ff !important; text-shadow:0 0 15px rgba(100,100,255,0.35); }
 
         .stTabs [data-baseweb="tab-list"] {
-            background: rgba(255,255,255,0.05); border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2); width:100%;
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
+            border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            width: 100%; /* Make tab bar take full width */
         }
         .stTabs [data-baseweb="tab"] {
             color:#8ab4ff !important; font-family:'Space Grotesk', sans-serif !important; font-weight:700;
-            transition: all .3s ease; flex-grow: 1; justify-content:center;
+            transition: all .3s ease;
+            flex-grow: 1; /* Allow tabs to grow and fill space */
+            justify-content: center; /* Center content (icon + text) within tab */
         }
         .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color:#7c3aed !important; }
         .stTabs [aria-selected="true"] {
@@ -205,9 +198,10 @@ def inject_custom_css():
             border-radius:10px; box-shadow: 0 4px 20px rgba(0,255,255,0.28);
         }
 
-        .stTextInput input, .stNumberInput input, .stSelectbox select {
+        .stTextInput input, .stNumberInput input, .stSelectbox select, .stSlider label {
             background: rgba(255,255,255,0.05) !important; border: 2px solid rgba(0,255,255,0.3) !important;
-            color:#e6e6ff !important; border-radius:10px !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            color:#e6e6ff !important; border-radius:10px !important; backdrop-filter: blur(5px);
+            transition: all .3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
         }
         .stTextInput input:focus, .stNumberInput input:focus {
             border-color:#7c3aed !important; box-shadow:0 0 30px rgba(124,58,237,0.45), inset 0 2px 4px rgba(0,0,0,0.2) !important;
@@ -222,13 +216,21 @@ def inject_custom_css():
         }
         .stButton > button:hover { transform: translateY(-2px) scale(1.02); box-shadow:0 10px 35px rgba(124,58,237,0.5); }
 
-        .stAlert { background: rgba(255,255,255,0.05) !important; border:2px solid rgba(255,255,255,0.2); border-radius:15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        .stAlert {
+            background: rgba(255,255,255,0.05) !important; backdrop-filter: blur(10px);
+            border:2px solid rgba(255,255,255,0.2); border-radius:15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
 
         [data-testid="metric-container"] {
-            background: rgba(255,255,255,0.05); border:2px solid rgba(255,255,255,0.1); padding:20px; border-radius:15px;
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
+            border:2px solid rgba(255,255,255,0.1); padding:20px; border-radius:15px;
             box-shadow:0 6px 25px rgba(0,0,0,0.3); transition: all 0.25s ease; position: relative; overflow: hidden;
         }
-        [data-testid="metric-container"]:hover { transform: translateY(-3px) scale(1.01); border-color: rgba(124,58,237,0.35); box-shadow:0 10px 40px rgba(124,58,237,0.35); }
+        [data-testid="metric-container"]:hover {
+            transform: translateY(-3px) scale(1.01);
+            border-color: rgba(124,58,237,0.35);
+            box-shadow:0 10px 40px rgba(124,58,237,0.35);
+        }
 
         [data-testid="stFileUploadDropzone"] {
             background: rgba(255,255,255,0.03); border:3px dashed rgba(124,58,237,0.35);
@@ -237,10 +239,10 @@ def inject_custom_css():
         [data-testid="stFileUploadDropzone"]:hover { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.6); transform: scale(1.01); }
 
         .stProgress > div > div > div {
-            background: linear-gradient(90deg, #00ffff, #7c3aed); border-radius:10px; animation: progressPulse 2s infinite;
-            box-shadow: 0 0 20px rgba(0,255,255,0.5);
+            background: linear-gradient(90deg, #00ffff, #7c3aed);
+            border-radius:10px; animation: progressPulse 2s infinite; box-shadow: 0 0 20px rgba(0,255,255,0.5);
         }
-        @keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:.85} }
+        @keyframes progressPulse { 0%,100%{opacity:1; box-shadow: 0 0 20px rgba(0,255,255,0.5);} 50%{opacity:.85; box-shadow: 0 0 40px rgba(124,58,237,0.7);} }
 
         ::-webkit-scrollbar { width:12px; background: rgba(255,255,255,0.05); }
         ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #667eea, #7c3aed); border-radius:10px; border: 2px solid rgba(255,255,255,0.1); }
@@ -248,45 +250,44 @@ def inject_custom_css():
         .streamlit-expanderHeader { background: rgba(255,255,255,0.07) !important; border-radius:10px !important; color:#a8b4ff !important; }
         .streamlit-expanderHeader:hover { background: rgba(124,58,237,0.1) !important; }
 
-        label, .stMarkdown p label, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stRadio label, .stCheckbox label { color: #8ab4ff !important; }
-        .stMarkdown, p, span, li { color:#c7d2ff !important; }
+        /* Force all labels that default to black/white into blue/purple */
+        label, .stMarkdown p label, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stRadio label, .stCheckbox label {
+            color: #8ab4ff !important;
+        }
+        .stMarkdown, p, span, li {
+            color:#c7d2ff !important;
+        }
         #MainMenu, header, footer { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
-    # Stars layers
+    # Parallax star layers
     st.markdown("""
     <div class="stars"></div>
     <div class="stars2"></div>
     <div class="stars3"></div>
     """, unsafe_allow_html=True)
 
-    # GLOBAL orbit background (behind content, blurs under glass)
-    st.markdown("""
-    <div class="orbits-bg">
-        <div class="orbits-wrap">
-            <div class="orbit o3"><div class="planet p3"></div></div>
-            <div class="orbit o2"><div class="planet p2"></div></div>
-            <div class="orbit o1"><div class="planet p1"></div></div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 inject_custom_css()
 
 # =========================
-# Header (no inline orbits; background orbits are global)
+# Header with orbiting planets
 # =========================
 def show_header():
     st.markdown("""
-        <div class="glass" style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
-            <h1>🌌 Celestial Ai</h1>
+        <div style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
+            <div class="title-wrap">
+                <div class="orbit o3"><div class="planet p3"></div></div>
+                <div class="orbit o2"><div class="planet p2"></div></div>
+                <div class="orbit o1"><div class="planet p1"></div></div>
+                <h1>🌌 Celestial Ai</h1>
+            </div>
         </div>
         <p style='text-align:center;color:#9bb3ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:8px;'>
             Advanced Exoplanet Detection System • NASA Space Apps 2025
         </p>
         <div style='text-align:center;margin:16px 0;'>
-            <span class="glass" style='background:linear-gradient(90deg,#667eea,#7c3aed);padding:8px 18px;border-radius:22px;color:#fff;font-size:.95rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(102,126,234,0.35);display:inline-block;'>
+            <span style='background:linear-gradient(90deg,#667eea,#7c3aed);padding:8px 18px;border-radius:22px;color:#fff;font-size:.95rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(102,126,234,0.35);display:inline-block;'>
                 ✨ Powered by a Kepler 10-Feature Model
             </span>
         </div>
@@ -295,11 +296,12 @@ def show_header():
 show_header()
 
 # =========================
-# Sidebar: Model Controls
+# Sidebar: Model Controls (no demo toggles)
 # =========================
 with st.sidebar:
     st.markdown("""
-        <div class="glass" style='text-align:center;padding:18px;margin-bottom:16px;border-radius:15px;border:1px solid rgba(0,255,255,0.28);'>
+        <div style='text-align:center;padding:18px;background:rgba(255,255,255,0.05);
+                    border-radius:15px;margin-bottom:16px;border:1px solid rgba(0,255,255,0.28);'>
             <h2 style='margin:0;font-size:1.45rem;'>🚀 Control Panel</h2>
         </div>
     """, unsafe_allow_html=True)
@@ -364,25 +366,25 @@ def decode_labels(y_pred_int: np.ndarray) -> np.ndarray:
         return np.array([classes_[i] for i in y_pred_int])
 
 # =========================
-# Tabs (insert game before About, rename Pretrain)
+# Tabs
 # =========================
-tab1, tab2, tab3, tab4, tab6, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Batch Analysis",
     "✨ Quick Classify",
-    "🧠 Pretrain Model",      # renamed
+    "🧠 Pretrained Model",
     "📈 Visualizations",
-    "🕹️ Guess the Class",    # new
     "ℹ️ About",
 ])
 
 # -------------------------
-# Tab 1: Batch Analysis
+# Tab 1: Batch Analysis (Upload OR analyze 10 rows from bundled dataset)
 # -------------------------
 with tab1:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("""
-            <div class="glass" style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
+            <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
+                        border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
                 <h3 style='margin:0;'>🚀 Batch Exoplanet Analysis</h3>
                 <p style='color:#b2c5ff;margin-top:10px;'>
                     Upload a CSV with the <b>10 Kepler features</b>, or click the blue button to analyze
@@ -407,6 +409,7 @@ with tab1:
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
+    # Blue action button: analyze 10 rows from default dataset immediately
     cbtn = st.columns([1, 1, 1])
     with cbtn[1]:
         if st.button("🔵 Analyze 10 Rows From Default Dataset", use_container_width=True, type="primary"):
@@ -443,6 +446,7 @@ with tab1:
                 except Exception as e:
                     st.error(f"Could not load the bundled dataset: {e}")
 
+    # Regular "Run Analysis" if the user uploaded a CSV
     if df is not None and used_source == "uploaded":
         with st.expander("📋 Dataset Preview (first 10 rows)", expanded=True):
             st.dataframe(df.head(10), use_container_width=True)
@@ -474,6 +478,7 @@ with tab1:
                         st.session_state["results"] = results
                         st.success(f"✅ Analysis complete! Processed {len(results)} rows from uploaded CSV.")
 
+    # Show results (from either path)
     if "results" in st.session_state:
         results = st.session_state["results"]
         st.markdown("### 📊 Analysis Summary")
@@ -519,16 +524,18 @@ with tab1:
         st.info("Upload model artifacts from the sidebar to enable analysis.")
 
 # -------------------------
-# Tab 2: Quick Classify
+# Tab 2: Quick Classify (human labels, no defaults; pipeline standardizes/encodes)
 # -------------------------
 with tab2:
     st.markdown("""
-        <div class="glass" style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
+        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
+                    border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
             <h3 style='margin:0;'>✨ Quick Candidate Classification</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>Enter the 10 trained features (the model scales/encodes internally).</p>
         </div>
     """, unsafe_allow_html=True)
 
+    # Two columns: human-friendly names, no default values
     colA, colB = st.columns(2)
 
     with colA:
@@ -585,7 +592,7 @@ with tab2:
                         sub = "This signal is likely not from a real exoplanet."
 
                     st.markdown(f"""
-                        <div class="glass" style='text-align:center;padding:30px;background:linear-gradient(135deg,{color_block[0]},{color_block[0]});
+                        <div style='text-align:center;padding:30px;background:linear-gradient(135deg,{color_block[0]},{color_block[0]});
                                     border-radius:20px;border:2px solid {color_block[1]};'>
                             <h2 style='margin:0;'>{title}</h2>
                             <h3>Confidence: {confidence:.1f}%</h3>
@@ -612,12 +619,13 @@ with tab2:
                     st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------
-# Tab 3: Pretrain Model (allow retrain from CSV)
+# Tab 3: Pretrained Model (allow retrain from CSV)
 # -------------------------
 with tab3:
     st.markdown("""
-        <div class="glass" style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
-            <h3 style='margin:0;'>🧠 Pretrain Model</h3>
+        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
+                    border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
+            <h3 style='margin:0;'>🧠 Pretrained Model</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>
                 Upload a CSV with the 10 features <b>+ 'koi_disposition'</b> to retrain and export a new pipeline & encoder.
             </p>
@@ -657,17 +665,24 @@ with tab3:
 
                         X = align_features_df_train(train_df)
                         numeric_transformer = Pipeline(
-                            steps=[("imputer", SimpleImputer(strategy="constant", fill_value=0)),
-                                   ("scaler", StandardScaler())]
+                            steps=[
+                                ("imputer", SimpleImputer(strategy="constant", fill_value=0)),
+                                ("scaler", StandardScaler()),
+                            ]
                         )
                         preprocessor = ColumnTransformer(
                             transformers=[("num", numeric_transformer, SELECTED_FEATURES)]
                         )
                         clf = HistGradientBoostingClassifier(
-                            learning_rate=0.05, max_iter=int(max_iter), max_depth=6,
-                            min_samples_leaf=20, l2_regularization=1.0,
-                            early_stopping=True, validation_fraction=0.1,
-                            n_iter_no_change=20, random_state=42,
+                            learning_rate=0.05,
+                            max_iter=int(max_iter),
+                            max_depth=6,
+                            min_samples_leaf=20,
+                            l2_regularization=1.0,
+                            early_stopping=True,
+                            validation_fraction=0.1,
+                            n_iter_no_change=20,
+                            random_state=42,
                         )
                         new_pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", clf)])
                         Xtr, Xte, ytr, yte = train_test_split(
@@ -691,11 +706,12 @@ with tab3:
         st.info("Upload training data to (re)train a compatible 10-feature model.")
 
 # -------------------------
-# Tab 4: Visualizations
+# Tab 4: Visualizations (no selection; show all plots together)
 # -------------------------
 with tab4:
     st.markdown("""
-        <div class="glass" style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
+        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);
+                    border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
             <h3 style='margin:0;'>📈 Data Visualizations</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>All visualizations render automatically from current results; if none, they use the bundled dataset.</p>
         </div>
@@ -706,6 +722,7 @@ with tab4:
         viz_df = st.session_state["results"].copy()
     else:
         try:
+            # Compute predictions for the whole bundled dataset (no random)
             base_df = get_default_dataset().copy()
             Xv = align_features_df(base_df)
             if pipeline is not None and label_encoder is not None:
@@ -723,6 +740,7 @@ with tab4:
             viz_df = None
 
     if viz_df is not None and len(viz_df) > 0:
+        # Row 1: distribution + confidence histogram
         cA, cB = st.columns(2)
         with cA:
             vc = viz_df["prediction"].value_counts()
@@ -735,6 +753,7 @@ with tab4:
             fig.update_layout(template="plotly_dark", height=420)
             st.plotly_chart(fig, use_container_width=True)
 
+        # Row 2: 2D scatter (Radius vs Period)
         cC, cD = st.columns(2)
         with cC:
             if all(c in viz_df.columns for c in ["koi_period", "koi_prad"]):
@@ -748,6 +767,7 @@ with tab4:
                 st.warning("Missing columns for Radius vs Period plot.")
 
         with cD:
+            # Correlation heatmap for numeric features
             num_cols = [c for c in SELECTED_FEATURES if c in viz_df.columns]
             if len(num_cols) >= 3:
                 corr = viz_df[num_cols].corr()
@@ -757,6 +777,7 @@ with tab4:
             else:
                 st.warning("Not enough numeric features for correlation heatmap.")
 
+        # Row 3: 3D explorer if columns exist
         if all(c in viz_df.columns for c in ["koi_model_snr", "koi_prad", "koi_period"]):
             fig3d = px.scatter_3d(
                 viz_df, x="koi_model_snr", y="koi_prad", z="koi_period",
@@ -770,190 +791,11 @@ with tab4:
         st.info("No data available to visualize yet.")
 
 # -------------------------
-# Tab 6: Guess the Class (game)
-# -------------------------
-with tab6:
-    st.markdown("""
-        <div class="glass" style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;border:1px solid rgba(0,255,255,0.22);'>
-            <h3 style='margin:0;'>🕹️ Guess the Class</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>
-                A random exoplanet candidate is shown with its 10 Kepler features. Guess whether it's
-                <b>CONFIRMED</b>, <b>CANDIDATE</b>, or <b>FALSE POSITIVE</b>.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    def prepare_game_df() -> pd.DataFrame:
-        try:
-            if "results" in st.session_state and len(st.session_state["results"]) > 0:
-                df_ = st.session_state["results"].copy()
-                for c in SELECTED_FEATURES:
-                    if c not in df_.columns: df_[c] = np.nan
-                df_["target_label"] = df_.get("koi_disposition", df_["prediction"])
-                return df_
-            else:
-                base = get_default_dataset().copy()
-                for c in SELECTED_FEATURES:
-                    if c not in base.columns: base[c] = np.nan
-                if pipeline is not None and label_encoder is not None:
-                    X = align_features_df(base)
-                    yhat = pipeline.predict(X)
-                    base["prediction"] = decode_labels(yhat)
-                base["target_label"] = base.get("koi_disposition", base.get("prediction", "CANDIDATE"))
-                return base
-        except Exception:
-            return pd.DataFrame([{
-                "koi_score":0.62,"koi_fpflag_nt":0,"koi_model_snr":14.8,"koi_fpflag_co":0,"koi_fpflag_ss":0,"koi_fpflag_ec":0,
-                "koi_impact":0.32,"koi_duration":11.1,"koi_prad":1.2,"koi_period":41.0,"target_label":"CANDIDATE"
-            }])
-
-    game_df = prepare_game_df()
-    if "game_state" not in st.session_state:
-        st.session_state["game_state"] = {"score": 0, "total": 0, "streak": 0, "last_idx": None, "revealed": False}
-    gs = st.session_state["game_state"]
-
-    rng = np.random.default_rng()
-    if "used_indices" not in st.session_state:
-        st.session_state["used_indices"] = set()
-    used = st.session_state["used_indices"]
-
-    available_idxs = [i for i in range(len(game_df)) if i not in used]
-    if not available_idxs:
-        used.clear()
-        available_idxs = list(range(len(game_df)))
-
-    if gs["last_idx"] is None or gs["revealed"]:
-        idx = int(rng.choice(available_idxs))
-        gs["last_idx"] = idx
-        gs["revealed"] = False
-        used.add(idx)
-    else:
-        idx = gs["last_idx"]
-
-    row = game_df.iloc[idx]
-
-    def feature_chip(name, val):
-        return f"<span style='display:inline-block;margin:6px 8px;padding:6px 10px;border:1px solid rgba(0,255,255,0.35);border-radius:999px;color:#dbe7ff;background:rgba(255,255,255,0.04);font-size:.9rem;'>{name}: <b>{val}</b></span>"
-
-    chips_top = "".join([
-        feature_chip("koi_score", f"{row.get('koi_score', np.nan):.2f}" if pd.notna(row.get('koi_score')) else "—"),
-        feature_chip("SNR", f"{row.get('koi_model_snr', np.nan):.1f}" if pd.notna(row.get('koi_model_snr')) else "—"),
-        feature_chip("impact", f"{row.get('koi_impact', np.nan):.2f}" if pd.notna(row.get('koi_impact')) else "—"),
-        feature_chip("duration[h]", f"{row.get('koi_duration', np.nan):.1f}" if pd.notna(row.get('koi_duration')) else "—"),
-        feature_chip("prad[Re]", f"{row.get('koi_prad', np.nan):.1f}" if pd.notna(row.get('koi_prad')) else "—"),
-    ])
-    chips_bot = "".join([
-        feature_chip("period[d]", f"{row.get('koi_period', np.nan):.1f}" if pd.notna(row.get('koi_period')) else "—"),
-        feature_chip("fp_nt", int(row.get('koi_fpflag_nt', 0))),
-        feature_chip("fp_co", int(row.get('koi_fpflag_co', 0))),
-        feature_chip("fp_ss", int(row.get('koi_fpflag_ss', 0))),
-        feature_chip("fp_ec", int(row.get('koi_fpflag_ec', 0))),
-    ])
-
-    st.markdown(f"""
-        <div class="glass" style="padding:20px;border-radius:16px;border:1px solid rgba(0,255,255,0.22);">
-            <div style="display:flex;flex-direction:column;align-items:center;gap:18px;">
-                <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;">{chips_top}</div>
-
-                <!-- Stylized Planet -->
-                <div style="position:relative;width:280px;height:280px;border-radius:50%;
-                            background: radial-gradient(circle at 30% 30%, #8ec5ff, #3a66b9 55%, #1b2a4a 100%);
-                            box-shadow: 0 0 50px rgba(0,255,255,0.25), inset -20px -30px 60px rgba(0,0,0,0.4);
-                            animation: spin 18s linear infinite;">
-                    <div style="position:absolute;inset:-14px;border-radius:50%;
-                                border:1px dashed rgba(140,160,255,0.25);
-                                animation: ring 22s linear infinite reverse;"></div>
-                    <div style="position:absolute;inset:-28px;border-radius:50%;
-                                border:1px dashed rgba(140,160,255,0.18);
-                                animation: ring 30s linear infinite;"></div>
-                </div>
-
-                <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;">{chips_bot}</div>
-            </div>
-        </div>
-
-        <style>
-            @keyframes spin {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }}
-            @keyframes ring {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }}
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### 🎯 Your Guess")
-    c1, c2, c3 = st.columns(3)
-    btn_labels = ["CONFIRMED", "CANDIDATE", "FALSE POSITIVE"]
-
-    # Compute model probabilities if available (for reveal)
-    proba_pct = None
-    if pipeline is not None and label_encoder is not None:
-        try:
-            X1 = align_features_df(pd.DataFrame([row[SELECTED_FEATURES].to_dict()]))
-            p = pipeline.predict_proba(X1)[0]
-            classes = list(getattr(label_encoder, "classes_", ["FALSE POSITIVE","CANDIDATE","CONFIRMED"]))
-            proba_pct = {cls: f"{(p[i]*100):.1f}%" for i, cls in enumerate(classes)}
-        except Exception:
-            proba_pct = None
-
-    feedback = st.empty()
-    correct_label = str(row.get("target_label", "CANDIDATE")).upper()
-
-    def handle_guess(guess_label: str):
-        ok = (guess_label.upper() == correct_label)
-        gs["total"] += 1
-        if ok:
-            gs["score"] += 1
-            gs["streak"] += 1
-            st.balloons()
-            feedback.success(f"✅ Correct! Target class: **{correct_label}**")
-        else:
-            gs["streak"] = 0
-            feedback.error(f"❌ Not quite. Target class: **{correct_label}**")
-        if proba_pct:
-            feedback.info("Model probabilities: " + " • ".join([f"{k}: {v}" for k,v in proba_pct.items()]))
-        gs["revealed"] = True
-
-    with c1:
-        if st.button("🌟 CONFIRMED", use_container_width=True, type="primary"):
-            handle_guess("CONFIRMED")
-    with c2:
-        if st.button("🔍 CANDIDATE", use_container_width=True):
-            handle_guess("CANDIDATE")
-    with c3:
-        if st.button("🚫 FALSE POSITIVE", use_container_width=True):
-            handle_guess("FALSE POSITIVE")
-
-    st.markdown("---")
-    s1, s2, s3, s4 = st.columns(4)
-    with s1:
-        st.metric("Score", f"{gs['score']} / {gs['total']}")
-    with s2:
-        pct = (gs["score"]/gs["total"]*100) if gs["total"] else 0.0
-        st.metric("Accuracy", f"{pct:.1f}%")
-    with s3:
-        st.metric("Streak", gs["streak"])
-    with s4:
-        st.metric("Rounds Played", gs["total"])
-
-    cnav1, cnav2, cnav3 = st.columns([1,1,1])
-    with cnav1:
-        if st.button("🔄 Reset Game", use_container_width=True):
-            st.session_state["game_state"] = {"score":0,"total":0,"streak":0,"last_idx":None,"revealed":False}
-            st.session_state["used_indices"] = set()
-            st.rerun()
-    with cnav2:
-        if st.button("👉 Skip", use_container_width=True):
-            gs["revealed"] = True
-            st.rerun()
-    with cnav3:
-        if st.button("➡️ Next", use_container_width=True):
-            gs["revealed"] = True
-            st.rerun()
-
-# -------------------------
 # Tab 5: About
 # -------------------------
 with tab5:
     st.markdown("""
-        <div class="glass" style='text-align:center;padding:20px;border-radius:15px;margin-bottom:24px;'>
+        <div style='text-align:center;padding:20px;background:rgba(255,255,255,0.05);border-radius:15px;margin-bottom:24px;'>
             <h3 style='margin:0;'>ℹ️ About Celestial Ai</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler 10-feature model edition</p>
         </div>
@@ -964,7 +806,7 @@ with tab5:
         st.markdown("""
             ### 🌌 Project Overview
             This build integrates your trained Kepler pipeline that uses exactly 10 features:
-            koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period.
+            `koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period`.
             It supports batch analysis, single-candidate classification, optional retraining, and interactive visuals—no random data.
         """)
     with col2:
@@ -978,7 +820,7 @@ with tab5:
 
     st.markdown("---")
     st.markdown("""
-        <div class="glass" style='text-align:center;padding:18px;border-radius:15px;'>
+        <div style='text-align:center;padding:18px;background:rgba(255,255,255,0.05);border-radius:15px;'>
             <h4 style='color:#00ffff;margin:0;'>👨‍🚀 Built for NASA Space Apps 2025</h4>
             <p style='color:#9bb3ff;'>Exploring new worlds through AI</p>
         </div>
@@ -994,3 +836,4 @@ st.markdown("""
         </p>
     </div>
 """, unsafe_allow_html=True)
+
