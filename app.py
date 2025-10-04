@@ -1,7 +1,8 @@
 # Celestial Ai (Kepler 10-feature edition) — Streamlit app
 # Integrates trained pipeline: gb_pipeline.joblib + label_encoder.joblib
 # Beautiful UI with Discord-style effects, NO RANDOM DATA, batch + single classify, retrain, visuals,
-# + NEW: Explorer 3D, Artistic Mode, and Guess-the-Class game.
+# + Explorer 3D, Artistic Mode, and Guess-the-Class game.
+# NOTE: Title is static now — no orbiting planets anywhere.
 
 import streamlit as st
 import pandas as pd
@@ -90,7 +91,7 @@ def get_default_dataset() -> pd.DataFrame:
     return df
 
 # =========================
-# Enhanced CSS — space theme + BACKGROUND orbital layer (blur under content)
+# CSS — starfield + glass UI (no orbiting planets)
 # =========================
 def inject_custom_css():
     st.markdown("""
@@ -109,7 +110,7 @@ def inject_custom_css():
             100%{background-position:0% 50%}
         }
 
-        /* Parallax star layers (z-index: 0) */
+        /* Parallax star layers */
         .stars, .stars2, .stars3 {
             position:fixed; top:0; left:0; width:100%; height:100%;
             pointer-events:none; z-index:0;
@@ -144,72 +145,28 @@ def inject_custom_css():
         @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
         @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
         @keyframes stars3 { 0% {transform: translateY(0);} 100% {transform: translateY(-220px);} }
-
-        /* BACKGROUND orbital layer (z-index:1) — planets rotate behind everything.
-           They will appear blurred beneath cards due to containers' backdrop-filter. */
-        .orbital-bg {
-            position: fixed; inset: 0;
-            display:flex; align-items:center; justify-content:center;
-            pointer-events: none; z-index: 1;
-        }
-        .orbit {
-            position: absolute;
-            border-radius: 50%;
-            border: 1px dashed rgba(100, 100, 255, 0.20);
-            filter: drop-shadow(0 0 6px rgba(0,255,255,0.25));
-        }
-        .o1 { width: 680px; height: 680px; animation: orbitRotate 24s linear infinite; }
-        .o2 { width: 920px; height: 920px; animation: orbitRotate 36s linear infinite reverse; }
-        .o3 { width: 1180px; height: 1180px; animation: orbitRotate 48s linear infinite; }
-        @keyframes orbitRotate { from {transform: rotate(0deg);} to {transform: rotate(360deg);} }
-
-        .planet {
-            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(0,200,255,0.35);
-        }
-        .p1 { width: 24px; height: 24px; background: radial-gradient(circle at 35% 35%, #7ad0ff, #2b6cb0 60%, #1a365d 100%); }
-        .p2 { width: 32px; height: 32px; background: radial-gradient(circle at 40% 30%, #ffd27a, #c05621 60%, #7b341e 100%); }
-        .p3 { width: 18px; height: 18px; background: radial-gradient(circle at 40% 30%, #d7a4ff, #8b5cf6 60%, #5538a3 100%); }
+        @keyframes twinkle { 0%,100%{opacity:.4} 50%{opacity:.8} }
 
         .main .block-container { position:relative; z-index: 2; padding-top: 2rem; }
 
-        /* Content styling (these add the blur of background orbits when intersecting) */
-        .glass, .stTabs [data-baseweb="tab-list"], [data-testid="metric-container"],
-        .stAlert, [data-testid="stFileUploadDropzone"] {
-            background: rgba(255,255,255,0.05) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
-            backdrop-filter: blur(6px) saturate(120%);
-        }
-
-        /* === Header orbiting planets around the title (restored) === */
-        .title-wrap { position: relative; display: inline-block; padding: 30px 60px; }
-        .title-wrap .orbit {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-            border: 1px dashed rgba(100, 100, 255, 0.25);
-            pointer-events: none;
-            filter: none;
-        }
-        .title-wrap .o1 { width: 380px; height: 380px; animation: orbitRotate 24s linear infinite; }
-        .title-wrap .o2 { width: 540px; height: 540px; animation: orbitRotate 36s linear infinite reverse; }
-        .title-wrap .o3 { width: 700px; height: 700px; animation: orbitRotate 48s linear infinite; }
-        .title-wrap .planet { box-shadow: 0 0 20px rgba(0,200,255,0.4); }
-        .title-wrap .p1 { width: 26px; height: 26px; top:-13px; left:50%; transform:translateX(-50%); }
-        .title-wrap .p2 { width: 34px; height: 34px; top:-17px; left:50%; transform:translateX(-50%); }
-        .title-wrap .p3 { width: 18px; height: 18px; top:-9px;  left:50%; transform:translateX(-50%); }
-
+        /* Title styles (static) */
         h1 {
             font-family:'Orbitron', monospace !important; font-weight:900 !important;
             background: linear-gradient(120deg, #00ffff, #ff00ff, #8b5cf6, #00ffff);
             background-size:200% auto; background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
             animation: shine 3s linear infinite;
             text-align:center; font-size:3.6rem !important; margin:0 !important;
-            text-shadow:0 0 40px rgba(0,255,255,0.5);
+            text-shadow:0 0 40px rgba(0,255,255,0.55);
         }
         @keyframes shine { to { background-position: 200% center; } }
+
+        /* Glass + controls */
+        .glass, .stTabs [data-baseweb="tab-list"], [data-testid="metric-container"],
+        .stAlert, [data-testid="stFileUploadDropzone"] {
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            backdrop-filter: blur(6px) saturate(120%);
+        }
 
         h2,h3 { font-family:'Space Grotesk', sans-serif !important; color:#b9c4ff !important; text-shadow:0 0 15px rgba(100,100,255,0.35); }
 
@@ -269,7 +226,6 @@ def inject_custom_css():
         .streamlit-expanderHeader { background: rgba(255,255,255,0.07) !important; border-radius:10px !important; color:#a8b4ff !important; }
         .streamlit-expanderHeader:hover { background: rgba(124,58,237,0.1) !important; }
 
-        /* Force all labels into blue/purple */
         label, .stMarkdown p label, .stSelectbox label, .stNumberInput label, .stTextInput label, .stSlider label, .stRadio label, .stCheckbox label {
             color: #8ab4ff !important;
         }
@@ -279,40 +235,29 @@ def inject_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-    # Parallax stars + GLOBAL orbital background layer (behind all content)
+    # Star layers only (NO orbit layers anywhere)
     st.markdown("""
     <div class="stars"></div>
     <div class="stars2"></div>
     <div class="stars3"></div>
-
-    <div class="orbital-bg">
-        <div class="orbit o3"><div class="planet p3"></div></div>
-        <div class="orbit o2"><div class="planet p2"></div></div>
-        <div class="orbit o1"><div class="planet p1"></div></div>
-    </div>
     """, unsafe_allow_html=True)
 
 inject_custom_css()
 
 # =========================
-# Header (title WITH spinning planets around it)
+# Header (static title, no planets)
 # =========================
 def show_header():
     st.markdown("""
         <div style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
-            <div class="title-wrap">
-                <div class="orbit o3"><div class="planet p3"></div></div>
-                <div class="orbit o2"><div class="planet p2"></div></div>
-                <div class="orbit o1"><div class="planet p1"></div></div>
-                <h1>🌌 Celestial Ai</h1>
-            </div>
+            <h1>🌌 Celestial Ai</h1>
         </div>
         <p style='text-align:center;color:#9bb3ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:8px;'>
             Advanced Exoplanet Detection System • NASA Space Apps 2025
         </p>
         <div style='text-align:center;margin:16px 0;'>
             <span class='glass' style='display:inline-block;background:linear-gradient(90deg,#667eea,#7c3aed);padding:8px 18px;border-radius:22px;color:#fff;font-size:.95rem;font-family:Space Grotesk;box-shadow:0 6px 20px rgba(102,126,234,0.35);'>
-                ✨ Powered by a Kepler 10-Feature Model
+                ✨ Powered by a Kepler Top 10-Feature Model
             </span>
         </div>
     """, unsafe_allow_html=True)
@@ -404,16 +349,16 @@ def get_viz_df_from_results_or_default(pipeline, label_encoder) -> pd.DataFrame:
     return base_df
 
 # =========================
-# Tabs (order matters: game sits between Visualizations and About)
+# Tabs (order matters)
 # =========================
 tab1, tab2, tab3, tabX1, tabX2, tab4, tab6, tab5 = st.tabs([
     "🔍 Batch Analysis",
     "✨ Quick Classify",
-    "🧠 Pretrain Model",         # renamed
-    "🔭 Exoplanet Explorer 3D",  # new
-    "🎨 Artistic Mode",          # new
+    "🧠 Pretrain Model",
+    "🔭 Exoplanet Explorer 3D",
+    "🎨 Artistic Mode",
     "📈 Visualizations",
-    "🕹️ Guess the Exoplanet",   # new — BETWEEN Visualizations and About
+    "🕹️ Guess the Exoplanet",
     "ℹ️ About",
 ])
 
@@ -460,7 +405,7 @@ with tab1:
                     if len(df_default) < 10:
                         st.error("Default dataset has fewer than 10 rows. Please bundle a larger CSV in /data.")
                     else:
-                        df = df_default.head(10).reset_index(drop=True)
+                        df = df_default.head(10).reset_index(drop=True)  # DETERMINISTIC (no randomness)
                         used_source = "default"
                         with st.spinner("Analyzing 10 rows from the default dataset..."):
                             X = align_features_df(df)
@@ -651,7 +596,7 @@ with tab2:
                     st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------
-# Tab 3: Pretrain Model (allow retrain from CSV) — RENAMED
+# Tab 3: Pretrain Model (allow retrain from CSV)
 # -------------------------
 with tab3:
     st.markdown("""
@@ -733,7 +678,7 @@ with tab3:
         st.info("Upload training data to (re)train a compatible 10-feature model.")
 
 # -------------------------
-# Tab X1: Exoplanet Explorer 3D (interactive)
+# Tab X1: Exoplanet Explorer 3D
 # -------------------------
 with tabX1:
     st.markdown("""
@@ -745,7 +690,6 @@ with tabX1:
 
     viz_df = get_viz_df_from_results_or_default(pipeline, label_encoder)
 
-    # Filters
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         color_mode = st.selectbox("Color by", ["prediction", "koi_score"])
@@ -777,7 +721,7 @@ with tabX1:
         st.plotly_chart(fig3d, use_container_width=True)
 
 # -------------------------
-# Tab X2: Artistic Mode (galaxy-style visual from data — spacey background)
+# Tab X2: Artistic Mode
 # -------------------------
 with tabX2:
     st.markdown("""
@@ -785,54 +729,20 @@ with tabX2:
             <h3 style='margin:0;'>🎨 Artistic Mode</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>A stylized galaxy made from your data: radius → orbital period, angle → normalized SNR, size → confidence.</p>
         </div>
-        <style>
-            .art-space {
-                background:
-                    radial-gradient(1200px 600px at 20% 10%, rgba(124,58,237,0.18), transparent 60%),
-                    radial-gradient(1000px 500px at 80% 20%, rgba(0,255,255,0.12), transparent 60%),
-                    radial-gradient(800px 800px at 50% 80%, rgba(0,0,0,0.35), transparent 70%),
-                    #060414;
-                position: relative;
-                border-radius: 18px;
-                padding: 16px;
-                border: 1px solid rgba(255,255,255,0.08);
-                box-shadow: 0 10px 40px rgba(0,0,0,0.35);
-                overflow: hidden;
-            }
-            .art-space:before, .art-space:after {
-                content: "";
-                position: absolute; inset: 0;
-                background-image:
-                    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.8), transparent 40%),
-                    radial-gradient(1.2px 1.2px at 40% 70%, rgba(173,216,255,0.8), transparent 40%),
-                    radial-gradient(0.8px 0.8px at 70% 40%, rgba(255,255,255,0.7), transparent 40%),
-                    radial-gradient(1px 1px at 85% 60%, rgba(200,230,255,0.8), transparent 40%),
-                    radial-gradient(0.8px 0.8px at 10% 80%, rgba(255,255,255,0.7), transparent 40%);
-                opacity: 0.55;
-                pointer-events: none;
-            }
-            .art-space:after {
-                transform: translateY(-12px);
-                filter: blur(0.6px);
-                opacity: 0.35;
-            }
-        </style>
     """, unsafe_allow_html=True)
 
     art_df = get_viz_df_from_results_or_default(pipeline, label_encoder).copy()
 
-    # Normalize features deterministically to polar space
     def norm(col):
         a, b = art_df[col].min(), art_df[col].max()
         if a == b:
             return np.zeros_like(art_df[col], dtype=float)
         return (art_df[col] - a) / (b - a)
 
-    r = 0.15 + 0.85 * norm("koi_period")   # radial distance
-    theta = 2 * np.pi * norm("koi_model_snr")  # angle
+    r = 0.15 + 0.85 * norm("koi_period")
+    theta = 2 * np.pi * norm("koi_model_snr")
     x = r * np.cos(theta)
     y = r * np.sin(theta)
-
     sizes = 8 + 22 * (art_df["confidence"] / 100.0)
 
     fig = go.Figure()
@@ -860,13 +770,10 @@ with tabX2:
         plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=60, b=0)
     )
-
-    st.markdown("<div class='art-space'>", unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------
-# Tab 4: Visualizations (all-in-one)
+# Tab 4: Visualizations
 # -------------------------
 with tab4:
     st.markdown("""
@@ -926,7 +833,7 @@ with tab4:
         st.info("No data available to visualize yet.")
 
 # -------------------------
-# Tab 6: Guess the Exoplanet (game)
+# Tab 6: Guess the Exoplanet
 # -------------------------
 with tab6:
     st.markdown("""
@@ -937,11 +844,9 @@ with tab6:
     """, unsafe_allow_html=True)
 
     game_df = get_viz_df_from_results_or_default(pipeline, label_encoder).copy()
-    # Ensure we have a ground-truth label to play with
     if "koi_disposition" in game_df.columns:
         game_df["true_label"] = game_df["koi_disposition"].astype(str)
     else:
-        # fallback to model prediction as "truth" if labels missing
         game_df["true_label"] = game_df["prediction"].astype(str)
 
     if "game_idx" not in st.session_state:
@@ -950,10 +855,8 @@ with tab6:
         st.session_state["game_rounds"] = 0
         st.session_state["game_streak"] = 0
 
-    # deterministic loop through dataset (no randomness)
     cur = game_df.iloc[st.session_state["game_idx"] % len(game_df)]
 
-    # Planet card with features
     st.markdown(f"""
         <div class='glass' style='padding:24px;border-radius:20px;'>
             <div style='display:flex; gap:24px; align-items:center; flex-wrap:wrap;'>
@@ -977,7 +880,6 @@ with tab6:
         </div>
     """, unsafe_allow_html=True)
 
-    # Guess buttons
     gcol1, gcol2, gcol3 = st.columns(3)
     user_guess = None
     with gcol1:
@@ -993,7 +895,6 @@ with tab6:
     if "reveal" not in st.session_state:
         st.session_state["reveal"] = False
 
-    # Evaluate guess
     if user_guess is not None:
         truth = str(cur["true_label"])
         st.session_state["game_rounds"] += 1
@@ -1006,7 +907,6 @@ with tab6:
             st.error(f"❌ Not quite. Ground truth: {truth}")
         st.session_state["reveal"] = True
 
-    # If reveal, show model perspective too (if pipeline loaded)
     if st.session_state["reveal"] and pipeline is not None:
         Xrow = align_features_df(pd.DataFrame([cur[SELECTED_FEATURES]]))
         proba = pipeline.predict_proba(Xrow)[0]
@@ -1018,7 +918,6 @@ with tab6:
         fig.update_layout(template="plotly_dark", height=320, title="Model probabilities for this planet")
         st.plotly_chart(fig, use_container_width=True)
 
-    # Score + Next round
     sc1, sc2, sc3, sc4 = st.columns(4)
     with sc1:
         st.metric("Score", f"{st.session_state['game_score']}")
@@ -1032,7 +931,6 @@ with tab6:
             st.session_state["reveal"] = False
             st.rerun()
 
-    # Reset
     if st.button("🔄 Reset Game", use_container_width=True):
         st.session_state["game_idx"] = 0
         st.session_state["game_score"] = 0
@@ -1059,7 +957,6 @@ with tab5:
             This build integrates your trained Kepler pipeline that uses exactly 10 features:
             `koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period`.
             It supports batch analysis, single-candidate classification, optional retraining, and interactive visuals—no random data.
-       
         """)
     with col2:
         st.markdown("""
@@ -1068,7 +965,7 @@ with tab5:
             - Bundled default dataset for first-time users  
             - Clean UI with metrics & downloads  
             - Plotly visuals & 3D explorer  
-            - New: Explorer 3D, Artistic Mode, Guess-the-Class game
+            - Explorer 3D, Artistic Mode, Guess-the-Class game
         """)
 
     st.markdown("---")
@@ -1089,5 +986,4 @@ st.markdown("""
         </p>
     </div>
 """, unsafe_allow_html=True)
-
 
