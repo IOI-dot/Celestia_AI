@@ -1,8 +1,8 @@
-# Celestial Ai (Kepler 10-feature edition) — Streamlit app
+# Celestial Ai (Kepler Top 10-feature edition) — Streamlit app
 # Integrates trained pipeline: gb_pipeline.joblib + label_encoder.joblib
 # Beautiful UI with Discord-style effects, NO RANDOM DATA, batch + single classify, retrain, visuals,
 # + Explorer 3D, Artistic Mode, and Guess-the-Class game.
-# NOTE: Title is static now — no orbiting planets anywhere.
+# Title has exactly three planets orbiting it. The planets blur underlying content wherever they pass.
 
 import streamlit as st
 import pandas as pd
@@ -57,7 +57,7 @@ DATA_DIR.mkdir(exist_ok=True)
 BUNDLED_CSV_NAME = "Celestial_AI___Synthetic_Kepler_10-feature_Data_with_Labels__preview_.csv"
 BUNDLED_CSV_PATH = DATA_DIR / BUNDLED_CSV_NAME
 
-# Embedded 10-row fallback (guarantees feature works on new device if bundled CSV is missing)
+# Embedded 10-row fallback (guarantees feature works on a new device if bundled CSV is missing)
 EMBEDDED_CSV_B64 = base64.b64encode(
     b"koi_score,koi_fpflag_nt,koi_model_snr,koi_fpflag_co,koi_fpflag_ss,koi_fpflag_ec,koi_impact,koi_duration,koi_prad,koi_period,koi_disposition\n"
     b"0.73,0,19.2,0,0,0,0.41,9.7,1.6,28.5,CONFIRMED\n"
@@ -91,7 +91,7 @@ def get_default_dataset() -> pd.DataFrame:
     return df
 
 # =========================
-# CSS — starfield + glass UI (no orbiting planets)
+# CSS — starfield + glass UI + TITLE-ONLY orbiting planets with blur-on-overlap
 # =========================
 def inject_custom_css():
     st.markdown("""
@@ -149,16 +149,87 @@ def inject_custom_css():
 
         .main .block-container { position:relative; z-index: 2; padding-top: 2rem; }
 
-        /* Title styles (static) */
-        h1 {
+        /* ===== TITLE-ONLY ORBIT SYSTEM ===== */
+        .title-stage{
+            position: relative;
+            display:flex; justify-content:center; align-items:center;
+            margin-top:10px; margin-bottom:4px;
+        }
+        .title-wrap {
+            position: relative; display: inline-block; padding: 28px 60px;
+            z-index: 3; /* above orbits so text stays crisp */
+        }
+        .title-wrap h1 {
             font-family:'Orbitron', monospace !important; font-weight:900 !important;
             background: linear-gradient(120deg, #00ffff, #ff00ff, #8b5cf6, #00ffff);
             background-size:200% auto; background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
             animation: shine 3s linear infinite;
             text-align:center; font-size:3.6rem !important; margin:0 !important;
             text-shadow:0 0 40px rgba(0,255,255,0.55);
+            position: relative;
         }
         @keyframes shine { to { background-position: 200% center; } }
+
+        /* Orbit rings container (centered on title) */
+        .t-orbit {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px dashed rgba(100, 100, 255, 0.22);
+            border-radius: 50%;
+            pointer-events: none;
+            filter: drop-shadow(0 0 6px rgba(0,255,255,0.25));
+            z-index: 2; /* below title text, above background */
+        }
+        .t-o1 { width: 360px; height: 360px; animation: tSpin1 24s linear infinite; }
+        .t-o2 { width: 520px; height: 520px; animation: tSpin2 36s linear infinite reverse; }
+        .t-o3 { width: 680px; height: 680px; animation: tSpin3 48s linear infinite; }
+
+        /* Planets: we rotate the ring; the planet sits at the top of each ring.
+           We use semi-transparent fills + backdrop-filter so underlying content blurs
+           wherever a planet overlaps it. */
+        .t-planet {
+            position: absolute;
+            top: -14px; left: 50%;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.06); /* translucent to let backdrop-filter show */
+            box-shadow: 0 0 20px rgba(0,200,255,0.35), inset -8px -10px 18px rgba(0,0,0,0.45);
+            pointer-events: none;
+            z-index: 4; /* float above most things */
+            -webkit-backdrop-filter: blur(3.5px) saturate(120%); /* Safari */
+            backdrop-filter: blur(3.5px) saturate(120%);         /* Chromium */
+            mix-blend-mode: screen;
+        }
+        /* Colored “core” via multi-layered gradients for depth */
+        .t-planet::before{
+            content:"";
+            position:absolute; inset:0;
+            border-radius:50%;
+            background:
+              radial-gradient(40% 40% at 35% 35%, rgba(255,255,255,.25), transparent 60%),
+              radial-gradient(120% 120% at 70% 80%, rgba(0,0,0,.35), transparent 60%);
+        }
+
+        .t-p1 { width: 26px; height: 26px; }
+        .t-p1::before { background:
+              radial-gradient(45% 45% at 30% 30%, rgba(122,208,255,.8), rgba(43,108,176,.35) 60%, transparent 100%),
+              radial-gradient(120% 120% at 70% 80%, rgba(0,0,0,.35), transparent 60%); }
+
+        .t-p2 { width: 34px; height: 34px; }
+        .t-p2::before { background:
+              radial-gradient(45% 45% at 35% 30%, rgba(255,210,122,.85), rgba(192,86,33,.35) 60%, transparent 100%),
+              radial-gradient(120% 120% at 70% 80%, rgba(0,0,0,.35), transparent 60%); }
+
+        .t-p3 { width: 20px; height: 20px; }
+        .t-p3::before { background:
+              radial-gradient(45% 45% at 40% 35%, rgba(215,164,255,.85), rgba(139,92,246,.35) 60%, transparent 100%),
+              radial-gradient(120% 120% at 70% 80%, rgba(0,0,0,.35), transparent 60%); }
+
+        /* keep ring centered while rotating */
+        @keyframes tSpin1 { from { transform: translate(-50%, -50%) rotate(0deg);} to { transform: translate(-50%, -50%) rotate(360deg);} }
+        @keyframes tSpin2 { from { transform: translate(-50%, -50%) rotate(0deg);} to { transform: translate(-50%, -50%) rotate(360deg);} }
+        @keyframes tSpin3 { from { transform: translate(-50%, -50%) rotate(0deg);} to { transform: translate(-50%, -50%) rotate(360deg);} }
 
         /* Glass + controls */
         .glass, .stTabs [data-baseweb="tab-list"], [data-testid="metric-container"],
@@ -235,7 +306,7 @@ def inject_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-    # Star layers only (NO orbit layers anywhere)
+    # Star layers only (no global orbits)
     st.markdown("""
     <div class="stars"></div>
     <div class="stars2"></div>
@@ -245,12 +316,17 @@ def inject_custom_css():
 inject_custom_css()
 
 # =========================
-# Header (static title, no planets)
+# Header (title WITH three orbiting planets; planets blur underlying content)
 # =========================
 def show_header():
     st.markdown("""
-        <div style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
-            <h1>🌌 Celestial Ai</h1>
+        <div class="title-stage">
+            <div class="title-wrap">
+                <div class="t-orbit t-o3"><div class="t-planet t-p3"></div></div>
+                <div class="t-orbit t-o2"><div class="t-planet t-p2"></div></div>
+                <div class="t-orbit t-o1"><div class="t-planet t-p1"></div></div>
+                <h1>🌌 Celestial Ai</h1>
+            </div>
         </div>
         <p style='text-align:center;color:#9bb3ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:8px;'>
             Advanced Exoplanet Detection System • NASA Space Apps 2025
@@ -308,7 +384,7 @@ with st.sidebar:
     with c1:
         st.metric("Model", "✅ Ready" if (pipeline is not None and label_encoder is not None) else "❌ Missing")
     with c2:
-        st.metric("Features", f"{len(SELECTED_FEATURES)} used", delta="Kepler 10-feature")
+        st.metric("Features", f"{len(SELECTED_FEATURES)} used", delta="Kepler Top 10-feature")
 
 # =========================
 # Utilities
@@ -405,7 +481,7 @@ with tab1:
                     if len(df_default) < 10:
                         st.error("Default dataset has fewer than 10 rows. Please bundle a larger CSV in /data.")
                     else:
-                        df = df_default.head(10).reset_index(drop=True)  # DETERMINISTIC (no randomness)
+                        df = df_default.head(10).reset_index(drop=True)  # deterministic
                         used_source = "default"
                         with st.spinner("Analyzing 10 rows from the default dataset..."):
                             X = align_features_df(df)
@@ -675,7 +751,7 @@ with tab3:
         except Exception as e:
             st.error(f"Error during training: {e}")
     else:
-        st.info("Upload training data to (re)train a compatible 10-feature model.")
+        st.info("Upload training data to (re)train a compatible Top 10-feature model.")
 
 # -------------------------
 # Tab X1: Exoplanet Explorer 3D
@@ -727,7 +803,7 @@ with tabX2:
     st.markdown("""
         <div class='glass' style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;'>
             <h3 style='margin:0;'>🎨 Artistic Mode</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>A stylized galaxy made from your data: radius → orbital period, angle → normalized SNR, size → confidence.</p>
+            <p style='color:#b2c5ff;margin-top:10px;'>A stylized galaxy made from data: radius → orbital period, angle → normalized SNR, size → confidence.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -839,7 +915,7 @@ with tab6:
     st.markdown("""
         <div class='glass' style='text-align:center;padding:20px;border-radius:16px;margin-bottom:24px;'>
             <h3 style='margin:0;'>🕹️ Guess the Exoplanet</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>Look at the features shown on the planet and guess its class: <b>CONFIRMED</b>, <b>CANDIDATE</b>, or <b>FALSE POSITIVE</b>.</p>
+            <p style='color:#b2c5ff;margin-top:10px;'>Observe the features shown on the planet and make a class guess: <b>CONFIRMED</b>, <b>CANDIDATE</b>, or <b>FALSE POSITIVE</b>.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -873,7 +949,7 @@ with tab6:
                     </div>
                 </div>
                 <div style='flex:1; min-width:280px;'>
-                    <h3 style='margin-top:0;'>Make your guess</h3>
+                    <h3 style='margin-top:0;'>Make our guess</h3>
                     <p style='color:#b2c5ff;'>Also consider flags: NT={int(cur['koi_fpflag_nt'])}, CO={int(cur['koi_fpflag_co'])}, SS={int(cur['koi_fpflag_ss'])}, EC={int(cur['koi_fpflag_ec'])}</p>
                 </div>
             </div>
@@ -946,7 +1022,7 @@ with tab5:
     st.markdown("""
         <div class='glass' style='text-align:center;padding:20px;border-radius:15px;margin-bottom:24px;'>
             <h3 style='margin:0;'>ℹ️ About Celestial Ai</h3>
-            <p style='color:#b2c5ff;margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler 10-feature model edition</p>
+            <p style='color:#b2c5ff;margin-top:10px;'>NASA Space Apps Challenge 2025 — Kepler Top 10-feature model edition</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -954,15 +1030,15 @@ with tab5:
     with col1:
         st.markdown("""
             ### 🌌 Project Overview
-            This build integrates your trained Kepler pipeline that uses exactly 10 features:
+            This build integrates our trained Kepler pipeline that uses exactly 10 features:
             `koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period`.
             It supports batch analysis, single-candidate classification, optional retraining, and interactive visuals—no random data.
         """)
     with col2:
         st.markdown("""
             ### 🏆 Highlights
-            - Exact feature alignment to your model  
-            - Bundled default dataset for first-time users  
+            - Exact feature alignment to our model  
+            - Bundled default dataset for first-time runs  
             - Clean UI with metrics & downloads  
             - Plotly visuals & 3D explorer  
             - Explorer 3D, Artistic Mode, Guess-the-Class game
@@ -982,7 +1058,7 @@ with tab5:
 st.markdown("""
     <div style='text-align:center;margin-top:38px;padding:18px;border-top:1px solid rgba(255,255,255,0.1);'>
         <p style='color:#8fa1ff;font-size:0.95rem;'>
-            Celestial Ai • NASA Space Apps 2025 • <span style='color:#7c3aed;'>Kepler 10-Feature Pipeline</span>
+            Celestial Ai • NASA Space Apps 2025 • <span style='color:#7c3aed;'>Kepler Top 10-Feature Pipeline</span>
         </p>
     </div>
 """, unsafe_allow_html=True)
