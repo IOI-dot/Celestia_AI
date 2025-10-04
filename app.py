@@ -182,6 +182,25 @@ def inject_custom_css():
             backdrop-filter: blur(6px) saturate(120%);
         }
 
+        /* === Header orbiting planets around the title (restored) === */
+        .title-wrap { position: relative; display: inline-block; padding: 30px 60px; }
+        .title-wrap .orbit {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px dashed rgba(100, 100, 255, 0.25);
+            pointer-events: none;
+            filter: none;
+        }
+        .title-wrap .o1 { width: 380px; height: 380px; animation: orbitRotate 24s linear infinite; }
+        .title-wrap .o2 { width: 540px; height: 540px; animation: orbitRotate 36s linear infinite reverse; }
+        .title-wrap .o3 { width: 700px; height: 700px; animation: orbitRotate 48s linear infinite; }
+        .title-wrap .planet { box-shadow: 0 0 20px rgba(0,200,255,0.4); }
+        .title-wrap .p1 { width: 26px; height: 26px; top:-13px; left:50%; transform:translateX(-50%); }
+        .title-wrap .p2 { width: 34px; height: 34px; top:-17px; left:50%; transform:translateX(-50%); }
+        .title-wrap .p3 { width: 18px; height: 18px; top:-9px;  left:50%; transform:translateX(-50%); }
+
         h1 {
             font-family:'Orbitron', monospace !important; font-weight:900 !important;
             background: linear-gradient(120deg, #00ffff, #ff00ff, #8b5cf6, #00ffff);
@@ -226,9 +245,7 @@ def inject_custom_css():
         }
         .stButton > button:hover { transform: translateY(-2px) scale(1.02); box-shadow:0 10px 35px rgba(124,58,237,0.5); }
 
-        .stAlert {
-            border-radius:15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        }
+        .stAlert { border-radius:15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
 
         [data-testid="metric-container"] {
             padding:20px; border-radius:15px;
@@ -278,12 +295,17 @@ def inject_custom_css():
 inject_custom_css()
 
 # =========================
-# Header (title only; planets now live in background layer)
+# Header (title WITH spinning planets around it)
 # =========================
 def show_header():
     st.markdown("""
         <div style='width:100%;display:flex;justify-content:center;align-items:center;margin-top:10px;margin-bottom:4px;'>
-            <h1>🌌 Celestial Ai</h1>
+            <div class="title-wrap">
+                <div class="orbit o3"><div class="planet p3"></div></div>
+                <div class="orbit o2"><div class="planet p2"></div></div>
+                <div class="orbit o1"><div class="planet p1"></div></div>
+                <h1>🌌 Celestial Ai</h1>
+            </div>
         </div>
         <p style='text-align:center;color:#9bb3ff;font-family:Space Grotesk;font-size:1.2rem;margin-top:8px;'>
             Advanced Exoplanet Detection System • NASA Space Apps 2025
@@ -755,7 +777,7 @@ with tabX1:
         st.plotly_chart(fig3d, use_container_width=True)
 
 # -------------------------
-# Tab X2: Artistic Mode (galaxy-style visual from data — no randomness)
+# Tab X2: Artistic Mode (galaxy-style visual from data — spacey background)
 # -------------------------
 with tabX2:
     st.markdown("""
@@ -763,6 +785,38 @@ with tabX2:
             <h3 style='margin:0;'>🎨 Artistic Mode</h3>
             <p style='color:#b2c5ff;margin-top:10px;'>A stylized galaxy made from your data: radius → orbital period, angle → normalized SNR, size → confidence.</p>
         </div>
+        <style>
+            .art-space {
+                background:
+                    radial-gradient(1200px 600px at 20% 10%, rgba(124,58,237,0.18), transparent 60%),
+                    radial-gradient(1000px 500px at 80% 20%, rgba(0,255,255,0.12), transparent 60%),
+                    radial-gradient(800px 800px at 50% 80%, rgba(0,0,0,0.35), transparent 70%),
+                    #060414;
+                position: relative;
+                border-radius: 18px;
+                padding: 16px;
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+                overflow: hidden;
+            }
+            .art-space:before, .art-space:after {
+                content: "";
+                position: absolute; inset: 0;
+                background-image:
+                    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.8), transparent 40%),
+                    radial-gradient(1.2px 1.2px at 40% 70%, rgba(173,216,255,0.8), transparent 40%),
+                    radial-gradient(0.8px 0.8px at 70% 40%, rgba(255,255,255,0.7), transparent 40%),
+                    radial-gradient(1px 1px at 85% 60%, rgba(200,230,255,0.8), transparent 40%),
+                    radial-gradient(0.8px 0.8px at 10% 80%, rgba(255,255,255,0.7), transparent 40%);
+                opacity: 0.55;
+                pointer-events: none;
+            }
+            .art-space:after {
+                transform: translateY(-12px);
+                filter: blur(0.6px);
+                opacity: 0.35;
+            }
+        </style>
     """, unsafe_allow_html=True)
 
     art_df = get_viz_df_from_results_or_default(pipeline, label_encoder).copy()
@@ -780,13 +834,17 @@ with tabX2:
     y = r * np.sin(theta)
 
     sizes = 8 + 22 * (art_df["confidence"] / 100.0)
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x, y=y, mode="markers",
-        marker=dict(size=sizes, color=np.where(art_df["prediction"]=="CONFIRMED", 1,
-                                               np.where(art_df["prediction"]=="CANDIDATE", 0.5, 0)),
-                    colorscale=[[0,"#ff5b5b"], [0.5,"#ffd84d"], [1,"#31ffd9"]],
-                    opacity=0.9),
+        marker=dict(
+            size=sizes,
+            color=np.where(art_df["prediction"]=="CONFIRMED", 1,
+                           np.where(art_df["prediction"]=="CANDIDATE", 0.5, 0)),
+            colorscale=[[0,"#ff5b5b"], [0.5,"#ffd84d"], [1,"#31ffd9"]],
+            opacity=0.92
+        ),
         text=[f"{p} • conf {c:.1f}%<br>period {per:.2f} d, radius {pr:.2f} R⊕"
               for p,c,per,pr in zip(art_df["prediction"], art_df["confidence"], art_df["koi_period"], art_df["koi_prad"])],
         hoverinfo="text"
@@ -797,9 +855,15 @@ with tabX2:
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
         title="Galaxy of Exoplanets (data → art)",
-        showlegend=False
+        showlegend=False,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=60, b=0)
     )
-    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("<div class='art-space'>", unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------
 # Tab 4: Visualizations (all-in-one)
@@ -995,6 +1059,7 @@ with tab5:
             This build integrates your trained Kepler pipeline that uses exactly 10 features:
             `koi_score, koi_fpflag_nt, koi_model_snr, koi_fpflag_co, koi_fpflag_ss, koi_fpflag_ec, koi_impact, koi_duration, koi_prad, koi_period`.
             It supports batch analysis, single-candidate classification, optional retraining, and interactive visuals—no random data.
+       
         """)
     with col2:
         st.markdown("""
