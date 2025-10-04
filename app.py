@@ -105,6 +105,11 @@ def inject_custom_css():
             overflow-x: hidden;
         }
         @keyframes gradientShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.5; }
+        }
 
         /* Parallax star layers */
         .stars, .stars2, .stars3 { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; }
@@ -116,7 +121,7 @@ def inject_custom_css():
                 radial-gradient(1px 1px at 80px 10px, white, transparent),
                 radial-gradient(2px 2px at 130px 80px, white, transparent);
             background-repeat: repeat; background-size:200px 200px;
-            animation: stars 60s linear infinite; opacity:0.15;
+            animation: stars 60s linear infinite, twinkle 7s ease-in-out infinite;
         }
         .stars2{
             background-image:
@@ -125,7 +130,7 @@ def inject_custom_css():
                 radial-gradient(1px 1px at 200px 40px, #aaccff, transparent),
                 radial-gradient(2px 2px at 300px 160px, #ffffff, transparent);
             background-repeat: repeat; background-size:300px 300px;
-            animation: stars2 120s linear infinite; opacity:0.12;
+            animation: stars2 120s linear infinite, twinkle 10s ease-in-out infinite reverse;
         }
         .stars3{
             background-image:
@@ -133,7 +138,7 @@ def inject_custom_css():
                 radial-gradient(2px 2px at 240px 180px, #ffffff, transparent),
                 radial-gradient(1px 1px at 400px 120px, #cfe8ff, transparent);
             background-repeat: repeat; background-size:500px 500px;
-            animation: stars3 240s linear infinite; opacity:0.08;
+            animation: stars3 240s linear infinite, twinkle 15s ease-in-out infinite;
         }
         @keyframes stars { 0% {transform: translateY(0);} 100% {transform: translateY(-120px);} }
         @keyframes stars2 { 0% {transform: translateY(0);} 100% {transform: translateY(-180px);} }
@@ -179,10 +184,13 @@ def inject_custom_css():
             background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
             border-radius:15px; padding:10px; border:1px solid rgba(255,255,255,0.1);
             box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            width: 100%; /* Make tab bar take full width */
         }
         .stTabs [data-baseweb="tab"] {
             color:#8ab4ff !important; font-family:'Space Grotesk', sans-serif !important; font-weight:700;
             transition: all .3s ease;
+            flex-grow: 1; /* Allow tabs to grow and fill space */
+            justify-content: center; /* Center content (icon + text) within tab */
         }
         .stTabs [data-baseweb="tab"]:hover { transform: translateY(-2px); color:#7c3aed !important; }
         .stTabs [aria-selected="true"] {
@@ -828,5 +836,4 @@ st.markdown("""
         </p>
     </div>
 """, unsafe_allow_html=True)
-
 
